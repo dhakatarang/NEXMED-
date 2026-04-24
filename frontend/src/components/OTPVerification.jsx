@@ -11,7 +11,6 @@ function OTPVerification({ email, onVerified, onBack }) {
   const inputRefs = useRef([]);
 
   useEffect(() => {
-    // Focus first input on mount
     if (inputRefs.current[0]) {
       inputRefs.current[0].focus();
     }
@@ -30,9 +29,7 @@ function OTPVerification({ email, onVerified, onBack }) {
   }, [timer, canResend]);
 
   const handleChange = (index, value) => {
-    // Only allow numbers
     if (value && !/^\d*$/.test(value)) return;
-    
     if (value.length > 1) return;
     
     const newOtp = [...otp];
@@ -40,7 +37,6 @@ function OTPVerification({ email, onVerified, onBack }) {
     setOtp(newOtp);
     setError('');
 
-    // Auto-focus next input
     if (value && index < 5) {
       inputRefs.current[index + 1]?.focus();
     }
@@ -51,7 +47,6 @@ function OTPVerification({ email, onVerified, onBack }) {
       inputRefs.current[index - 1]?.focus();
     }
     
-    // Allow paste
     if (e.key === 'v' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       const pastedText = e.clipboardData?.getData('text');
@@ -74,7 +69,8 @@ function OTPVerification({ email, onVerified, onBack }) {
     setError('');
 
     try {
-      const response = await axios.post('http://localhost:5001/api/auth/verify-otp', {
+      // ✅ FIXED: Use Render backend URL
+      const response = await axios.post('https://nexmed.onrender.com/api/auth/verify-otp', {
         email,
         otp: otpValue,
         purpose: 'signup'
@@ -85,7 +81,6 @@ function OTPVerification({ email, onVerified, onBack }) {
       }
     } catch (err) {
       setError(err.response?.data?.message || 'Invalid OTP. Please try again.');
-      // Clear OTP fields on error
       setOtp(['', '', '', '', '', '']);
       inputRefs.current[0]?.focus();
     } finally {
@@ -98,7 +93,8 @@ function OTPVerification({ email, onVerified, onBack }) {
     setError('');
 
     try {
-      await axios.post('http://localhost:5001/api/auth/resend-otp', { 
+      // ✅ FIXED: Use Render backend URL
+      await axios.post('https://nexmed.onrender.com/api/auth/resend-otp', { 
         email,
         purpose: 'signup'
       });
@@ -106,7 +102,6 @@ function OTPVerification({ email, onVerified, onBack }) {
       setCanResend(false);
       setOtp(['', '', '', '', '', '']);
       setError('');
-      // Focus first input
       inputRefs.current[0]?.focus();
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to resend OTP');
