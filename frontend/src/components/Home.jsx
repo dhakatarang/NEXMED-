@@ -42,7 +42,7 @@ const Home = () => {
     formData.append('image', selectedFile);
 
     try {
-      const response = await axios.post('http://localhost:5001/api/upload-medicine', formData, {
+      const response = await axios.post('https://nexmed.onrender.com/api/upload-medicine', formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }

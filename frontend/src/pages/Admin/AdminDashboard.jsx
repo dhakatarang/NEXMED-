@@ -13,7 +13,7 @@ const AdminDashboard = () => {
 
   const fetchDashboardData = async () => {
     try {
-      const response = await axios.get('http://localhost:5001/api/admin/dashboard');
+      const response = await axios.get('https://nexmed.onrender.com/api/admin/dashboard');
       if (response.data.success) {
         setDashboardData(response.data.dashboard);
       }

@@ -17,7 +17,7 @@ const AdminUsers = () => {
   const fetchUsers = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('http://localhost:5001/api/admin/users');
+      const response = await axios.get('https://nexmed.onrender.com/api/admin/users');
       if (response.data.success) {
         setUsers(response.data.users);
       }
@@ -40,7 +40,7 @@ const AdminUsers = () => {
 
   const updateUserRole = async (userId, newRole) => {
     try {
-      const response = await axios.put(`http://localhost:5001/api/admin/users/${userId}/role`, {
+      const response = await axios.put(`https://nexmed.onrender.com/api/admin/users/${userId}/role`, {
         role: newRole
       });
       
@@ -58,7 +58,7 @@ const AdminUsers = () => {
 
   const toggleUserStatus = async (userId, currentStatus) => {
     try {
-      const response = await axios.put(`http://localhost:5001/api/admin/users/${userId}/status`, {
+      const response = await axios.put(`https://nexmed.onrender.com/api/admin/users/${userId}/status`, {
         is_active: !currentStatus
       });
       

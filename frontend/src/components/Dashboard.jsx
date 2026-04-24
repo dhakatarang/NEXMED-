@@ -27,20 +27,20 @@ const Dashboard = () => {
       setLoading(true);
       
       // Fetch medicines
-      const medicinesRes = await axios.get('http://localhost:5001/api/medicines/all');
+      const medicinesRes = await axios.get('https://nexmed.onrender.com/api/medicines/all');
       if (medicinesRes.data.success) {
         setMedicines(medicinesRes.data.medicines || []);
       }
       
       // Fetch equipment
-      const equipmentsRes = await axios.get('http://localhost:5001/api/equipments/all');
+      const equipmentsRes = await axios.get('https://nexmed.onrender.com/api/equipments/all');
       if (equipmentsRes.data.success) {
         setEquipments(equipmentsRes.data.equipments || []);
       }
       
       // Fetch users (if admin endpoint exists)
       try {
-        const usersRes = await axios.get('http://localhost:5001/api/users');
+        const usersRes = await axios.get('https://nexmed.onrender.com/api/users');
         if (usersRes.data.success) {
           setUsers(usersRes.data.users || []);
         }
@@ -389,7 +389,7 @@ const Dashboard = () => {
                 <div key={user.id} className="user-card">
                   <div className="user-avatar">
                     {user.profile_photo ? (
-                      <img src={`http://localhost:5001${user.profile_photo}`} alt={user.name} />
+                      <img src={`https://nexmed.onrender.com${user.profile_photo}`} alt={user.name} />
                     ) : (
                       <div className="avatar-placeholder">
                         {user.name?.charAt(0)?.toUpperCase() || 'U'}

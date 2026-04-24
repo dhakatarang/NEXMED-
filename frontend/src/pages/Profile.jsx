@@ -10,7 +10,7 @@ import React, { useEffect, useState, useRef } from "react";
 import "./Profile.css";
 import { useNavigate } from "react-router-dom";
 
-const API_BASE = "http://localhost:5001/api";
+const API_BASE = "https://nexmed.onrender.com/api";
 
 export default function Profile() {
   const [user, setUser] = useState(null);
@@ -195,7 +195,7 @@ export default function Profile() {
             <div className="profile-card">
               <div className="profile-avatar">
                 {user.profile_photo ? (
-                  <img src={`http://localhost:5001${user.profile_photo}`} alt={user.name} />
+                  <img src={`https://nexmed.onrender.com${user.profile_photo}`} alt={user.name} />
                 ) : (
                   <div className="avatar-placeholder">
                     {user.name?.charAt(0)?.toUpperCase() || "U"}
@@ -261,7 +261,7 @@ export default function Profile() {
                       <div key={item.id} className="contribution-item">
                         <div className="item-image">
                           {item.image_path ? (
-                            <img src={`http://localhost:5001/uploads/items/${item.image_path}`} alt={item.name} />
+                            <img src={`https://nexmed.onrender.com/uploads/items/${item.image_path}`} alt={item.name} />
                           ) : (
                             <div className="image-placeholder">{item.name?.charAt(0)}</div>
                           )}
@@ -291,7 +291,7 @@ export default function Profile() {
                       <div key={item.id} className="contribution-item">
                         <div className="item-image">
                           {item.image_path ? (
-                            <img src={`http://localhost:5001/uploads/items/${item.image_path}`} alt={item.name} />
+                            <img src={`https://nexmed.onrender.com/uploads/items/${item.image_path}`} alt={item.name} />
                           ) : (
                             <div className="image-placeholder">{item.name?.charAt(0)}</div>
                           )}

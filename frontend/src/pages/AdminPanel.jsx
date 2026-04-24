@@ -34,7 +34,7 @@ const AdminPanel = () => {
       setUser(user);
 
       const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:5001/api/admin/dashboard', {
+      const response = await axios.get('https://nexmed.onrender.com/api/admin/dashboard', {
         headers: {
           'Authorization': `Bearer ${token}`
         }

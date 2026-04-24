@@ -7,7 +7,7 @@ const getBaseURL = () => {
     return 'https://nexmed.onrender.com/api';
   }
   // Development (local)
-  return 'http://localhost:5001/api';
+  return 'https://nexmed.onrender.com/api';
 };
 
 const API = axios.create({

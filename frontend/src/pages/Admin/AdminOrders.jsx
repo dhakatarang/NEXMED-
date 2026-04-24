@@ -18,7 +18,7 @@ const AdminOrders = () => {
   const fetchOrders = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('http://localhost:5001/api/admin/orders');
+      const response = await axios.get('https://nexmed.onrender.com/api/admin/orders');
       if (response.data.success) {
         setOrders(response.data.orders);
       }
@@ -41,7 +41,7 @@ const AdminOrders = () => {
 
   const updateOrderStatus = async (orderId, newStatus) => {
     try {
-      const response = await axios.put(`http://localhost:5001/api/admin/orders/${orderId}/status`, {
+      const response = await axios.put(`https://nexmed.onrender.com/api/admin/orders/${orderId}/status`, {
         status: newStatus
       });
       

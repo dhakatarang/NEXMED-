@@ -18,7 +18,7 @@ const AdminMedicines = () => {
   const fetchMedicines = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('http://localhost:5001/api/admin/medicines');
+      const response = await axios.get('https://nexmed.onrender.com/api/admin/medicines');
       if (response.data.success) {
         setMedicines(response.data.medicines);
       }
@@ -45,7 +45,7 @@ const AdminMedicines = () => {
     }
 
     try {
-      const response = await axios.delete(`http://localhost:5001/api/admin/medicines/${medicineId}`);
+      const response = await axios.delete(`https://nexmed.onrender.com/api/admin/medicines/${medicineId}`);
       if (response.data.success) {
         showMessage('Medicine deleted successfully', 'success');
         setMedicines(medicines.filter(med => med.id !== medicineId));

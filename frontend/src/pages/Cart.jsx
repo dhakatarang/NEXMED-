@@ -22,7 +22,7 @@ const Cart = () => {
   const fetchCartItems = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('http://localhost:5001/api/cart');
+      const response = await axios.get('https://nexmed.onrender.com/api/cart');
       console.log('✅ Cart items:', response.data);
       setCartItems(response.data.cartItems || []);
     } catch (error) {
@@ -35,7 +35,7 @@ const Cart = () => {
 
   const removeFromCart = async (cartId) => {
     try {
-      await axios.delete(`http://localhost:5001/api/cart/${cartId}`);
+      await axios.delete(`https://nexmed.onrender.com/api/cart/${cartId}`);
       setCartItems(cartItems.filter(item => item.id !== cartId));
       setMessage('Item removed from cart');
     } catch (error) {
@@ -48,7 +48,7 @@ const Cart = () => {
     if (newQuantity < 1) return;
     
     try {
-      await axios.put(`http://localhost:5001/api/cart/${cartId}`, {
+      await axios.put(`https://nexmed.onrender.com/api/cart/${cartId}`, {
         quantity: newQuantity
       });
       setCartItems(cartItems.map(item => 
@@ -78,11 +78,11 @@ const Cart = () => {
       
       for (const item of cartItems) {
         if (item.itemType === 'medicine') {
-          await axios.post(`http://localhost:5001/api/medicines/buy/${item.itemId}`, {
+          await axios.post(`https://nexmed.onrender.com/api/medicines/buy/${item.itemId}`, {
             quantity: item.quantity
           });
         } else if (item.itemType === 'medicalequipment') {
-          await axios.post(`http://localhost:5001/api/equipments/action/${item.itemId}`, {
+          await axios.post(`https://nexmed.onrender.com/api/equipments/action/${item.itemId}`, {
             action: item.optionType === 'rent' ? 'rent' : 'buy',
             quantity: item.quantity,
             rentalDays: item.rentalDays || 1
@@ -90,7 +90,7 @@ const Cart = () => {
         }
       }
 
-      await axios.delete('http://localhost:5001/api/cart/clear');
+      await axios.delete('https://nexmed.onrender.com/api/cart/clear');
       setCartItems([]);
       setMessage('Checkout successful! Items purchased.');
       
@@ -166,7 +166,7 @@ const Cart = () => {
                   <div className="item-image">
                     {item.image ? (
                       <img 
-                        src={`http://localhost:5001/uploads/${item.image}`} 
+                        src={`https://nexmed.onrender.com/uploads/${item.image}`} 
                         alt={item.name}
                         onError={(e) => {
                           e.target.style.display = 'none';

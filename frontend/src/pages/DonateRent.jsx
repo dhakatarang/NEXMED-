@@ -151,7 +151,7 @@ const DonateRent = () => {
         return;
       }
 
-      const response = await axios.post('http://localhost:5001/api/donaterent/add', submitData, {
+      const response = await axios.post('https://nexmed.onrender.com/api/donaterent/add', submitData, {
         headers: {
           'Content-Type': 'multipart/form-data',
           'Authorization': `Bearer ${token}`

@@ -24,7 +24,7 @@ const MedicalEquipmentDetails = () => {
   const fetchEquipmentDetails = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(`http://localhost:5001/api/equipments/${id}`);
+      const response = await axios.get(`https://nexmed.onrender.com/api/equipments/${id}`);
       
       if (response.data.success) {
         const equipmentData = {
@@ -75,7 +75,7 @@ const MedicalEquipmentDetails = () => {
         payload.rentalDays = rentalDays;
       }
 
-      const response = await axios.post(`http://localhost:5001/api/equipments/action/${id}`, payload);
+      const response = await axios.post(`https://nexmed.onrender.com/api/equipments/action/${id}`, payload);
 
       if (response.data.success) {
         showMessage(`${action.charAt(0).toUpperCase() + action.slice(1)} successful!`, 'success');
@@ -96,7 +96,7 @@ const MedicalEquipmentDetails = () => {
   const handleAddToCart = async () => {
     try {
       setMessage('');
-      const response = await axios.post('http://localhost:5001/api/cart/add', {
+      const response = await axios.post('https://nexmed.onrender.com/api/cart/add', {
         itemId: equipment.id,
         itemType: 'medicalequipment',
         name: equipment.name,
@@ -208,7 +208,7 @@ const MedicalEquipmentDetails = () => {
           <div className="image-card">
             {equipment.image ? (
               <img 
-                src={`http://localhost:5001/uploads/${equipment.image}`} 
+                src={`https://nexmed.onrender.com/uploads/${equipment.image}`} 
                 alt={equipment.name}
                 className="details-image"
                 onError={(e) => {

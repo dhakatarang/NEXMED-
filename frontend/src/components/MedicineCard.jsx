@@ -64,11 +64,11 @@ const MedicineCard = ({ medicine }) => {
     
     // If it's a local path (starts with /uploads or similar)
     if (imagePath.startsWith('/')) {
-      return `http://localhost:5001${imagePath}`;
+      return `https://nexmed.onrender.com${imagePath}`;
     }
     
     // Fallback for relative paths
-    return `http://localhost:5001/uploads/${imagePath}`;
+    return `https://nexmed.onrender.com/uploads/${imagePath}`;
   };
 
   const handleClick = () => {

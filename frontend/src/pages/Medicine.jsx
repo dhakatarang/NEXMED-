@@ -25,7 +25,7 @@ const Medicine = () => {
       setMessage('');
       
       console.log('🔍 Fetching medicines...');
-      const response = await axios.get('http://localhost:5001/api/medicines/all');
+      const response = await axios.get('https://nexmed.onrender.com/api/medicines/all');
       console.log('✅ Medicines response:', response.data);
       
       if (response.data.success) {
@@ -202,7 +202,7 @@ const Medicine = () => {
               <div className="med-card-image-modern">
                 {medicine.image ? (
                   <img 
-                    src={`http://localhost:5001/uploads/${medicine.image}`} 
+                    src={`https://nexmed.onrender.com/uploads/${medicine.image}`} 
                     alt={medicine.name}
                     onError={(e) => {
                       e.target.style.display = 'none';

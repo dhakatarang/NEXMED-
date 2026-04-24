@@ -23,7 +23,7 @@ const MedicalEquipment = () => {
   const fetchEquipments = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('http://localhost:5001/api/equipments/all');
+      const response = await axios.get('https://nexmed.onrender.com/api/equipments/all');
       
       if (response.data.success) {
         const safeEquipments = response.data.equipments.map(equipment => ({
@@ -209,7 +209,7 @@ const MedicalEquipment = () => {
               <div className="med-equip-card-image-modern">
                 {equipment.image && !imageErrors.has(equipment.id) ? (
                   <img 
-                    src={`http://localhost:5001/uploads/${equipment.image}`} 
+                    src={`https://nexmed.onrender.com/uploads/${equipment.image}`} 
                     alt={equipment.name}
                     onError={() => handleImageError(equipment.id)}
                   />

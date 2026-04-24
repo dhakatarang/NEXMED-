@@ -23,7 +23,7 @@ const MedicineDetails = () => {
   const fetchMedicineDetails = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(`http://localhost:5001/api/medicines/${id}`);
+      const response = await axios.get(`https://nexmed.onrender.com/api/medicines/${id}`);
       
       if (response.data.success) {
         const medicineData = {
@@ -68,7 +68,7 @@ const MedicineDetails = () => {
     
     try {
       setMessage('');
-      const response = await axios.post(`http://localhost:5001/api/medicines/buy/${id}`, {
+      const response = await axios.post(`https://nexmed.onrender.com/api/medicines/buy/${id}`, {
         quantity: quantity
       });
 
@@ -93,7 +93,7 @@ const MedicineDetails = () => {
     
     try {
       setMessage('');
-      const response = await axios.post('http://localhost:5001/api/cart/add', {
+      const response = await axios.post('https://nexmed.onrender.com/api/cart/add', {
         itemId: medicine.id,
         itemType: 'medicine',
         name: medicine.name,
@@ -198,7 +198,7 @@ const MedicineDetails = () => {
           <div className="image-card">
             {medicine.image ? (
               <img 
-                src={`http://localhost:5001/uploads/${medicine.image}`} 
+                src={`https://nexmed.onrender.com/uploads/${medicine.image}`} 
                 alt={medicine.name}
                 className="details-image"
                 onError={(e) => {

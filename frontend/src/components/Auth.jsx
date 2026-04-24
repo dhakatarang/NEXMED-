@@ -46,7 +46,7 @@ const Auth = () => {
     setError('');
 
     try {
-      const endpoint = isLogin ? 'http://localhost:5001/api/login' : 'http://localhost:5001/api/register';
+      const endpoint = isLogin ? 'https://nexmed.onrender.com/api/login' : 'https://nexmed.onrender.com/api/register';
       
       // Remove confirmPassword before sending
       const { confirmPassword, ...submitData } = formData;
