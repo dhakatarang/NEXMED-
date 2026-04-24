@@ -1,0 +1,365 @@
+/* MedicineCard.css */
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Montserrat:wght@300;400;500;600&family=Inter:wght@300;400;500&display=swap');
+
+:root {
+  --card-black: #1a1a1a;
+  --card-dark-gray: #2a2a2a;
+  --card-medium-gray: #4a4a4a;
+  --card-light-gray: #9ca3af;
+  --card-off-white: #f5f5f5;
+  --card-white: #ffffff;
+  --card-border: #e0e0e0;
+  --card-hover: #3a3a3a;
+  --card-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  --card-shadow-lg: 0 8px 20px rgba(0, 0, 0, 0.1);
+  
+  --card-warning: #b76e2e;
+  --card-danger: #c62828;
+  --card-success: #2e7d32;
+  
+  --font-primary: 'Playfair Display', serif;
+  --font-secondary: 'Montserrat', sans-serif;
+  --font-body: 'Inter', sans-serif;
+}
+
+.medicine-card {
+  background: var(--card-white);
+  border: 1px solid var(--card-border);
+  box-shadow: var(--card-shadow);
+  overflow: hidden;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  position: relative;
+}
+
+.medicine-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--card-shadow-lg);
+  border-color: var(--card-medium-gray);
+}
+
+.medicine-card:focus {
+  outline: 2px solid var(--card-black);
+  outline-offset: 2px;
+}
+
+/* Status-specific borders */
+.medicine-card.expiring-soon {
+  border-left: 3px solid var(--card-warning);
+}
+
+.medicine-card.expired {
+  border-left: 3px solid var(--card-danger);
+  opacity: 0.8;
+}
+
+.medicine-card.valid {
+  border-left: 3px solid var(--card-success);
+}
+
+/* Image Container */
+.card-image-container {
+  position: relative;
+  width: 100%;
+  height: 160px;
+  background: var(--card-off-white);
+  border-bottom: 1px solid var(--card-border);
+  overflow: hidden;
+}
+
+.card-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.medicine-card:hover .card-image {
+  transform: scale(1.05);
+}
+
+.image-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--card-off-white);
+  color: var(--card-light-gray);
+  font-size: 3rem;
+}
+
+.card-image-container.image-fallback {
+  background: var(--card-off-white);
+}
+
+/* Status Badge */
+.status-badge {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  background: var(--card-white);
+  border: 1px solid var(--card-border);
+  color: var(--card-medium-gray);
+  z-index: 1;
+}
+
+.status-badge.expiring-soon {
+  background: rgba(183, 110, 46, 0.1);
+  border-color: var(--card-warning);
+  color: var(--card-warning);
+}
+
+.status-badge.expired {
+  background: rgba(198, 40, 40, 0.1);
+  border-color: var(--card-danger);
+  color: var(--card-danger);
+}
+
+.status-badge.valid {
+  background: rgba(46, 125, 80, 0.1);
+  border-color: var(--card-success);
+  color: var(--card-success);
+}
+
+/* Card Content */
+.card-content {
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  position: relative;
+}
+
+.medicine-name {
+  font-family: var(--font-secondary);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--card-black);
+  margin-bottom: 0.75rem;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 2.8em;
+  padding-right: 60px; /* Space for option badge */
+}
+
+/* Medicine Details */
+.medicine-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.detail-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.25rem 0;
+  border-bottom: 1px dashed var(--card-border);
+  font-size: 0.85rem;
+}
+
+.detail-item:last-child {
+  border-bottom: none;
+}
+
+.detail-label {
+  color: var(--card-light-gray);
+  font-weight: 300;
+}
+
+.detail-value {
+  color: var(--card-black);
+  font-weight: 500;
+}
+
+.detail-value.expiring-soon {
+  color: var(--card-warning);
+  font-weight: 600;
+}
+
+.detail-value.expired {
+  color: var(--card-danger);
+  font-weight: 600;
+}
+
+.detail-value.valid {
+  color: var(--card-success);
+  font-weight: 600;
+}
+
+/* Expiry Message */
+.expiry-message {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  border: 1px solid transparent;
+}
+
+.expiry-message.expiring-soon {
+  background: rgba(183, 110, 46, 0.05);
+  border-color: var(--card-warning);
+  color: var(--card-warning);
+}
+
+.expiry-message.expired {
+  background: rgba(198, 40, 40, 0.05);
+  border-color: var(--card-danger);
+  color: var(--card-danger);
+}
+
+.expiry-message.valid {
+  background: rgba(46, 125, 80, 0.05);
+  border-color: var(--card-success);
+  color: var(--card-success);
+}
+
+.message-icon {
+  font-size: 1rem;
+}
+
+.message-text {
+  flex: 1;
+  line-height: 1.4;
+}
+
+/* Option Badge */
+.option-badge {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  padding: 0.2rem 0.4rem;
+  background: var(--card-off-white);
+  border: 1px solid var(--card-border);
+  color: var(--card-medium-gray);
+}
+
+.option-badge.donate {
+  background: var(--card-black);
+  border-color: var(--card-black);
+  color: var(--card-white);
+}
+
+.option-badge.sell {
+  background: var(--card-dark-gray);
+  border-color: var(--card-dark-gray);
+  color: var(--card-white);
+}
+
+.option-badge.rent {
+  background: var(--card-medium-gray);
+  border-color: var(--card-medium-gray);
+  color: var(--card-white);
+}
+
+/* Loading State for Image */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.card-image-container.loading {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .card-image-container {
+    height: 140px;
+  }
+  
+  .medicine-name {
+    font-size: 0.95rem;
+    padding-right: 50px;
+  }
+  
+  .detail-item {
+    font-size: 0.8rem;
+  }
+  
+  .expiry-message {
+    font-size: 0.75rem;
+    padding: 0.4rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .card-image-container {
+    height: 120px;
+  }
+  
+  .option-badge {
+    top: 0.75rem;
+    right: 0.75rem;
+    font-size: 0.65rem;
+  }
+  
+  .medicine-name {
+    padding-right: 45px;
+  }
+}
+
+/* Accessibility */
+@media (prefers-reduced-motion: reduce) {
+  .medicine-card,
+  .card-image,
+  .medicine-card:hover {
+    animation: none;
+    transition: none;
+  }
+}
+
+/* Print styles */
+@media print {
+  .medicine-card {
+    box-shadow: none;
+    border: 1px solid #000;
+    break-inside: avoid;
+  }
+  
+  .status-badge,
+  .option-badge,
+  .expiry-message {
+    border: 1px solid #000;
+    background: none;
+    color: #000;
+  }
+  
+  .medicine-card:hover {
+    transform: none;
+  }
+}
+
+/* Empty state for no image */
+.card-image-container:empty::before {
+  content: '💊';
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  font-size: 2rem;
+  color: var(--card-light-gray);
+}

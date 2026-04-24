@@ -1,0 +1,28 @@
+# Environment variables (KEEPS YOUR .env PRIVATE)
+.env
+.env.local
+.env.production
+
+# Dependencies
+node_modules/
+package-lock.json
+
+# Database
+*.db
+*.sqlite
+backend/databases/
+
+# Uploaded files
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

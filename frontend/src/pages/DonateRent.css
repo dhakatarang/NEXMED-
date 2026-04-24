@@ -1,0 +1,361 @@
+/* frontend/src/pages/DonateRent.css */
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Montserrat:wght@300;400;500;600&family=Inter:wght@300;400;500&display=swap');
+
+:root {
+  --black: #1a1a1a;
+  --dark-gray: #2a2a2a;
+  --medium-gray: #4a4a4a;
+  --light-gray: #9ca3af;
+  --off-white: #f5f5f5;
+  --white: #ffffff;
+  --border: #e0e0e0;
+  --hover: #3a3a3a;
+  --shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  
+  --font-primary: 'Playfair Display', serif;
+  --font-secondary: 'Montserrat', sans-serif;
+  --font-body: 'Inter', sans-serif;
+}
+
+.donate-rent-page {
+  min-height: 100vh;
+  background: var(--off-white);
+  padding: 2rem;
+  font-family: var(--font-body);
+}
+
+/* Inspiration Section */
+.inspiration-section {
+  max-width: 600px;
+  margin: 0 auto 1.5rem auto;
+  text-align: center;
+}
+
+.inspiration-section h2 {
+  font-family: var(--font-primary);
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--black);
+  margin-bottom: 0.5rem;
+  letter-spacing: -0.02em;
+}
+
+.inspiration-section p {
+  font-size: 1rem;
+  color: var(--medium-gray);
+  line-height: 1.6;
+  font-weight: 300;
+}
+
+/* Form Container */
+.form-container {
+  max-width: 600px;
+  margin: 0 auto;
+  background: var(--white);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+}
+
+.form-header {
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--off-white);
+}
+
+.form-header h3 {
+  font-family: var(--font-primary);
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--black);
+  margin: 0;
+}
+
+/* Form */
+form {
+  padding: 1.5rem;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+@media (max-width: 480px) {
+  .form-row {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+}
+
+.form-group {
+  margin-bottom: 1rem;
+}
+
+.form-group:last-child {
+  margin-bottom: 0;
+}
+
+label {
+  display: block;
+  font-family: var(--font-secondary);
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--dark-gray);
+  margin-bottom: 0.4rem;
+  letter-spacing: 0.3px;
+}
+
+input[type="text"],
+input[type="number"],
+textarea,
+select,
+.file-input {
+  width: 100%;
+  padding: 0.75rem;
+  background: var(--white);
+  border: 1px solid var(--border);
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  color: var(--black);
+  transition: all 0.2s ease;
+  border-radius: 0;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: var(--medium-gray);
+  box-shadow: 0 0 0 2px rgba(74, 74, 74, 0.05);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--light-gray);
+  font-size: 0.9rem;
+  font-style: italic;
+}
+
+textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+select {
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%234a4a4a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  background-size: 16px;
+  padding-right: 2.5rem;
+}
+
+/* File Input */
+.file-input {
+  padding: 0.5rem;
+  background: var(--off-white);
+  cursor: pointer;
+}
+
+.file-input::-webkit-file-upload-button {
+  padding: 0.4rem 0.8rem;
+  background: var(--dark-gray);
+  color: var(--white);
+  border: none;
+  font-family: var(--font-secondary);
+  font-size: 0.8rem;
+  cursor: pointer;
+  margin-right: 0.75rem;
+}
+
+/* Pricing Section */
+.pricing-section {
+  margin: 1.5rem 0;
+  padding: 1.25rem;
+  background: var(--off-white);
+  border: 1px solid var(--border);
+}
+
+.pricing-section h4 {
+  font-family: var(--font-secondary);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--black);
+  margin-bottom: 1rem;
+  letter-spacing: 0.3px;
+}
+
+/* Comparison Box */
+.comparison-box {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.comparison-item {
+  padding: 0.75rem;
+  background: var(--white);
+  border: 1px solid var(--border);
+  text-align: center;
+}
+
+.comparison-item.highlight {
+  background: var(--black);
+  border-color: var(--black);
+}
+
+.comparison-item.highlight .comparison-label,
+.comparison-item.highlight .comparison-value {
+  color: var(--white);
+}
+
+.comparison-label {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--light-gray);
+  margin-bottom: 0.25rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.comparison-value {
+  display: block;
+  font-family: var(--font-secondary);
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--black);
+}
+
+/* Terms Group */
+.terms-group {
+  margin: 1.5rem 0;
+  padding: 1rem;
+  background: var(--off-white);
+  border: 1px solid var(--border);
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: var(--dark-gray);
+  margin: 0;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.terms-link {
+  background: none;
+  border: none;
+  color: var(--black);
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+  margin-left: 0.25rem;
+}
+
+.terms-link:hover {
+  opacity: 0.7;
+}
+
+/* Submit Button */
+.submit-button {
+  width: 100%;
+  padding: 1rem;
+  background: var(--black);
+  color: var(--white);
+  border: none;
+  font-family: var(--font-secondary);
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.submit-button:hover {
+  background: var(--hover);
+}
+
+.submit-button:disabled {
+  background: var(--light-gray);
+  cursor: not-allowed;
+}
+
+/* Messages */
+.message {
+  margin: 0 1.5rem 1rem 1.5rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.9rem;
+  border: 1px solid transparent;
+}
+
+.message.success {
+  background: rgba(46, 125, 80, 0.05);
+  border-color: #2e7d32;
+  color: #2e7d32;
+}
+
+.message.error {
+  background: rgba(198, 40, 40, 0.05);
+  border-color: #c62828;
+  color: #c62828;
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+  .donate-rent-page {
+    padding: 1rem;
+  }
+  
+  .inspiration-section h2 {
+    font-size: 1.75rem;
+  }
+  
+  .inspiration-section p {
+    font-size: 0.9rem;
+  }
+  
+  .form-header {
+    padding: 1rem;
+  }
+  
+  form {
+    padding: 1rem;
+  }
+  
+  .pricing-section {
+    padding: 1rem;
+  }
+  
+  .comparison-box {
+    gap: 0.5rem;
+  }
+  
+  .comparison-item {
+    padding: 0.5rem;
+  }
+  
+  .comparison-value {
+    font-size: 0.8rem;
+  }
+}
+
+/* Remove icons and keep only text */
+.type-btn::before,
+.action-btn::before,
+.option-icon {
+  display: none;
+}
