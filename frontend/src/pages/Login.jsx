@@ -71,7 +71,7 @@ function Login({ setIsLoggedIn }) {
 
   try {
     console.log('📍 Sending login request to backend...');
-    const res = await axios.post('http://localhost:5001/api/auth/login', {
+    const res = await axios.post('https://nexmed.onrender.com/api/auth/login', {
       email: formData.email.toLowerCase(),
       password: formData.password
     });

@@ -132,7 +132,7 @@ function SignUp() {
     // Function to send OTP
     const sendOTP = async () => {
         try {
-            const response = await axios.post('http://localhost:5001/api/auth/send-otp', {
+            const response = await axios.post('https://nexmed.onrender.com/api/auth/send-otp', {
                 email: formData.email.toLowerCase()
             });
             
@@ -203,7 +203,7 @@ function SignUp() {
                     submitData.append('medicalLicense', formData.medicalLicense);
                 }
 
-                const res = await axios.post('http://localhost:5001/api/auth/signup', submitData, {
+                const res = await axios.post('https://nexmed.onrender.com/api/auth/signup', submitData, {
                     headers: {
                         'Content-Type': 'multipart/form-data'
                     }
