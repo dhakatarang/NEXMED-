@@ -1,7 +1,17 @@
 import axios from 'axios';
 
+// Dynamic baseURL based on environment
+const getBaseURL = () => {
+  // Production (deployed on Render/Vercel)
+  if (import.meta.env.PROD) {
+    return 'https://nexmed.onrender.com/api';
+  }
+  // Development (local)
+  return 'http://localhost:5001/api';
+};
+
 const API = axios.create({
-  baseURL: 'http://localhost:5001/api',
+  baseURL: getBaseURL(),
   timeout: 10000,
 });
 

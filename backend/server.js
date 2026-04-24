@@ -1,4 +1,3 @@
-// backend/server.js
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
@@ -11,7 +10,7 @@ const equipmentRoutes = require("./routes/equipmentRoutes");
 const donaterentRoutes = require("./routes/donaterentRoutes");
 const profileRoutes = require("./routes/profileRoutes");
 const cartRoutes = require("./routes/cartRoutes");
-const adminRoutes = require("./routes/adminRoutes"); // NEW: Admin routes
+const adminRoutes = require("./routes/adminRoutes");
 
 // Import database initialization
 const { initAllDatabases } = require("./database/initDatabases");
@@ -37,11 +36,32 @@ console.log("🔄 Initializing databases...");
 initAllDatabases();
 console.log("✅ Databases initialized successfully");
 
-// Middleware
+// ========== UPDATED CORS CONFIGURATION ==========
+// Allow multiple origins (local development + production)
+const allowedOrigins = [
+  'http://localhost:3000',      // React default
+  'http://localhost:5173',      // Vite default
+  'http://localhost:5000',      // Alternative
+  'https://nexmed-frontend.vercel.app',  // Replace with your frontend URL
+  'https://nexmed-frontend.onrender.com', // If using Render for frontend
+  'https://your-frontend-url.netlify.app', // If using Netlify
+];
+
 app.use(cors({
-  origin: 'http://localhost:3000', // Your React app URL
-  credentials: true
+  origin: function(origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) === -1) {
+      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -59,8 +79,18 @@ app.get("/", (req, res) => {
   res.json({ 
     message: "NexMed Backend is Running ✅",
     version: "2.0",
+    environment: process.env.NODE_ENV || 'development',
     features: ["Enhanced Donate/Rent System", "Image Upload", "SQLite3 Database", "User Authentication", "Shopping Cart", "Admin Panel"],
     timestamp: new Date().toISOString()
+  });
+});
+
+// Health check endpoint for Render
+app.get("/health", (req, res) => {
+  res.status(200).json({ 
+    status: "healthy", 
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime()
   });
 });
 
@@ -119,7 +149,7 @@ app.use("/api/equipments", equipmentRoutes);
 app.use("/api/donaterent", donaterentRoutes);
 app.use("/api/profile", profileRoutes);
 app.use("/api/cart", cartRoutes);
-app.use("/api/admin", adminRoutes); // NEW: Admin routes
+app.use("/api/admin", adminRoutes);
 
 // 404 fallback
 app.use((req, res, next) => {
@@ -142,19 +172,13 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Start the server
+// Start the server - IMPORTANT: Bind to 0.0.0.0 for Render
 const PORT = process.env.PORT || 5001;
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📊 Health check: http://localhost:${PORT}/`);
-  console.log(`🔍 Database debug: http://localhost:${PORT}/api/debug-db`);
-  console.log(`👤 Profile test: http://localhost:${PORT}/api/profile/test`);
-  console.log(`📁 Uploads served from: ${uploadsDir}`);
-  console.log(`💊 Medicines API: http://localhost:${PORT}/api/medicines`);
-  console.log(`🏥 Equipment API: http://localhost:${PORT}/api/equipments`);
-  console.log(`🛒 Cart API: http://localhost:${PORT}/api/cart`);
-  console.log(`👑 Admin API: http://localhost:${PORT}/api/admin`);
-  console.log(`🤝 Donate/Rent API: http://localhost:${PORT}/api/donaterent`);
-  console.log(`🔐 Auth API: http://localhost:${PORT}/api/auth`);
-  console.log(`👤 Profile API: http://localhost:${PORT}/api/profile`);
+  console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`📊 Health check: https://nexmed.onrender.com/`);
+  console.log(`💊 Medicines API: /api/medicines`);
+  console.log(`🏥 Equipment API: /api/equipments`);
+  console.log(`🔐 Auth API: /api/auth`);
 });
