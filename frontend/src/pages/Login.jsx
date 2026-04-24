@@ -1,17 +1,9 @@
 // frontend/src/pages/Login.jsx
 
-
-/*
-
-    Login page -> (it is main Login Page)
-
-*/
-
-
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
-import './SignUp.css'; // Using same CSS as SignUp
+import './SignUp.css';
 
 function Login({ setIsLoggedIn }) {
     const [formData, setFormData] = useState({
@@ -23,11 +15,9 @@ function Login({ setIsLoggedIn }) {
     const [showPassword, setShowPassword] = useState(false);
     const navigate = useNavigate();
 
-    // Validation function
     const validateForm = () => {
         const newErrors = {};
 
-        // Email validation
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!formData.email) {
             newErrors.email = 'Email is required';
@@ -35,7 +25,6 @@ function Login({ setIsLoggedIn }) {
             newErrors.email = 'Please enter a valid email address';
         }
 
-        // Password validation
         if (!formData.password) {
             newErrors.password = 'Password is required';
         }
@@ -51,7 +40,6 @@ function Login({ setIsLoggedIn }) {
             [name]: value
         }));
         
-        // Clear error when user starts typing
         if (errors[name]) {
             setErrors(prev => ({
                 ...prev,
@@ -61,67 +49,64 @@ function Login({ setIsLoggedIn }) {
     };
 
     const handleSubmit = async (e) => {
-  e.preventDefault();
-  
-  if (!validateForm()) {
-    return;
-  }
+        e.preventDefault();
+        
+        if (!validateForm()) {
+            return;
+        }
 
-  setIsLoading(true);
+        setIsLoading(true);
 
-  try {
-    console.log('📍 Sending login request to backend...');
-    const res = await axios.post('https://nexmed.onrender.com/api/auth/login', {
-      email: formData.email.toLowerCase(),
-      password: formData.password
-    });
+        try {
+            console.log('📍 Sending login request to backend...');
+            
+            // ✅ FIXED: Use Render backend URL
+            const res = await axios.post('https://nexmed.onrender.com/api/auth/login', {
+                email: formData.email.toLowerCase(),
+                password: formData.password
+            });
 
-    console.log('✅ Login successful:', res.data);
-    
-    // Store the actual JWT token from backend response
-    if (res.data.token) {
-      localStorage.setItem('token', res.data.token);
-      localStorage.setItem('user', JSON.stringify(res.data.user));
-      console.log('🔐 Token stored:', res.data.token);
-      console.log('👤 User data stored:', res.data.user);
-      console.log('🔑 User role:', res.data.user.role);
-      
-      // Update login state in App.jsx
-      if (setIsLoggedIn) {
-        setIsLoggedIn(true);
-      }
-      
-      // Also dispatch custom event for App.jsx to catch
-      window.dispatchEvent(new Event('loginStateChange'));
-    }
-    
-    // AUTO-REDIRECT BASED ON ROLE
-    if (res.data.user.role === 'admin') {
-      console.log('🚀 Redirecting to ADMIN panel');
-      navigate('/admin');
-    } else {
-      console.log('🏠 Redirecting to USER home');
-      navigate('/home');
-    }
-    
-  } catch (err) {
-    console.error('💥 Login error:', err);
-    console.error('💥 Error response:', err.response);
-    
-    // Enhanced error handling
-    const errorMessage = err.response?.data?.error || 
-                        err.response?.data?.message || 
-                        'Login failed. Please try again.';
-    
-    if (err.response?.status === 401) {
-      setErrors({ general: 'Invalid email or password' });
-    } else {
-      alert(errorMessage);
-    }
-  } finally {
-    setIsLoading(false);
-  }
-};
+            console.log('✅ Login successful:', res.data);
+            
+            if (res.data.token) {
+                localStorage.setItem('token', res.data.token);
+                localStorage.setItem('user', JSON.stringify(res.data.user));
+                console.log('🔐 Token stored:', res.data.token);
+                console.log('👤 User data stored:', res.data.user);
+                console.log('🔑 User role:', res.data.user.role);
+                
+                if (setIsLoggedIn) {
+                    setIsLoggedIn(true);
+                }
+                
+                window.dispatchEvent(new Event('loginStateChange'));
+            }
+            
+            if (res.data.user.role === 'admin') {
+                console.log('🚀 Redirecting to ADMIN panel');
+                navigate('/admin');
+            } else {
+                console.log('🏠 Redirecting to USER home');
+                navigate('/home');
+            }
+            
+        } catch (err) {
+            console.error('💥 Login error:', err);
+            console.error('💥 Error response:', err.response);
+            
+            const errorMessage = err.response?.data?.error || 
+                                err.response?.data?.message || 
+                                'Login failed. Please try again.';
+            
+            if (err.response?.status === 401) {
+                setErrors({ general: 'Invalid email or password' });
+            } else {
+                alert(errorMessage);
+            }
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     const togglePasswordVisibility = () => {
         setShowPassword(!showPassword);

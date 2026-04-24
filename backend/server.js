@@ -43,8 +43,12 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
-// Handle preflight requests
-app.options('*', cors());
+
+// ✅ Handle OPTIONS preflight for ALL routes
+app.options('*', (req, res) => {
+  res.sendStatus(200);
+});
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

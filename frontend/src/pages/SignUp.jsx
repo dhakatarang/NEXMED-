@@ -7,7 +7,7 @@ import OTPVerification from '../components/OTPVerification';
 import './SignUp.css';
 
 function SignUp() {
-    const [step, setStep] = useState('signup'); // 'signup' or 'otp'
+    const [step, setStep] = useState('signup');
     const [formData, setFormData] = useState({
         name: '',
         email: '',
@@ -33,7 +33,6 @@ function SignUp() {
 
     const requiresLicense = ['Healthcare Organization', 'Medical Supplier'];
 
-    // Enhanced password validation
     const validatePassword = (password) => {
         const minLength = 8;
         const hasUpperCase = /[A-Z]/.test(password);
@@ -51,18 +50,15 @@ function SignUp() {
         };
     };
 
-    // Validation function
     const validateForm = () => {
         const newErrors = {};
 
-        // Name validation
         if (!formData.name.trim()) {
             newErrors.name = 'Name is required';
         } else if (formData.name.trim().length < 2) {
             newErrors.name = 'Name must be at least 2 characters';
         }
 
-        // Email validation
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!formData.email) {
             newErrors.email = 'Email is required';
@@ -70,12 +66,10 @@ function SignUp() {
             newErrors.email = 'Please enter a valid email address';
         }
 
-        // User Type validation
         if (!formData.userType) {
             newErrors.userType = 'Please select your user type';
         }
 
-        // Password validation
         if (!formData.password) {
             newErrors.password = 'Password is required';
         } else {
@@ -85,12 +79,10 @@ function SignUp() {
             }
         }
 
-        // Confirm password validation
         if (formData.password !== formData.confirmPassword) {
             newErrors.confirmPassword = 'Passwords do not match';
         }
 
-        // Medical License validation for specific user types
         if (requiresLicense.includes(formData.userType) && !formData.medicalLicense) {
             newErrors.medicalLicense = 'Medical license/certificate is required for this user type';
         }
@@ -107,7 +99,6 @@ function SignUp() {
                 ...prev,
                 [name]: files[0]
             }));
-            // Clear error for file input
             if (errors[name]) {
                 setErrors(prev => ({
                     ...prev,
@@ -119,7 +110,6 @@ function SignUp() {
                 ...prev,
                 [name]: value
             }));
-            // Clear error when user starts typing
             if (errors[name]) {
                 setErrors(prev => ({
                     ...prev,
@@ -129,7 +119,7 @@ function SignUp() {
         }
     };
 
-    // Function to send OTP
+    // ✅ FIXED: Use Render backend URL
     const sendOTP = async () => {
         try {
             const response = await axios.post('https://nexmed.onrender.com/api/auth/send-otp', {
@@ -155,12 +145,10 @@ function SignUp() {
         }
     };
 
-    // Modified handleSubmit
     const handleSubmit = async (e) => {
         e.preventDefault();
         
         if (!validateForm()) {
-            // Scroll to first error
             const firstError = document.querySelector('.error-message');
             if (firstError) {
                 firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -171,10 +159,8 @@ function SignUp() {
         setIsLoading(true);
 
         try {
-            // First, send OTP to email
             const otpSent = await sendOTP();
             if (otpSent) {
-                // Move to OTP verification step
                 setStep('otp');
             }
         } catch (error) {
@@ -185,10 +171,8 @@ function SignUp() {
         }
     };
 
-    // Function to handle OTP verification success
     const handleOTPVerified = async (isVerified) => {
         if (isVerified) {
-            // Now proceed with actual signup
             setIsLoading(true);
             
             try {
@@ -203,6 +187,7 @@ function SignUp() {
                     submitData.append('medicalLicense', formData.medicalLicense);
                 }
 
+                // ✅ FIXED: Use Render backend URL
                 const res = await axios.post('https://nexmed.onrender.com/api/auth/signup', submitData, {
                     headers: {
                         'Content-Type': 'multipart/form-data'
@@ -220,7 +205,7 @@ function SignUp() {
                 console.error('💥 Registration error:', err);
                 const errorMessage = err.response?.data?.message || 'Registration failed. Please try again.';
                 alert(errorMessage);
-                setStep('signup'); // Go back to signup form on error
+                setStep('signup');
             } finally {
                 setIsLoading(false);
             }
@@ -237,7 +222,6 @@ function SignUp() {
 
     const passwordValidation = formData.password ? validatePassword(formData.password) : null;
 
-    // If in OTP step, show OTP verification
     if (step === 'otp') {
         return (
             <OTPVerification 
@@ -248,7 +232,6 @@ function SignUp() {
         );
     }
 
-    // Signup form
     return (
         <div className="signup-container">
             <form onSubmit={handleSubmit} className="signup-form">
