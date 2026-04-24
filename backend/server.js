@@ -36,27 +36,9 @@ console.log("🔄 Initializing databases...");
 initAllDatabases();
 console.log("✅ Databases initialized successfully");
 
-// ========== UPDATED CORS CONFIGURATION ==========
-// Allow multiple origins (local development + production)
-const allowedOrigins = [
-  'http://localhost:3000',      // React default
-  'http://localhost:5173',      // Vite default
-  'http://localhost:5000',      // Alternative
-  'https://nexmed-frontend.vercel.app',  // Replace with your frontend URL
-  'https://nexmed-frontend.onrender.com', // If using Render for frontend
-  'https://your-frontend-url.netlify.app', // If using Netlify
-];
-
+// ========== CORS CONFIGURATION ==========
 app.use(cors({
-  origin: function(origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl)
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) === -1) {
-      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
-      return callback(new Error(msg), false);
-    }
-    return callback(null, true);
-  },
+  origin: ['http://localhost:3000', 'http://localhost:5173', 'https://nexmed-1.onrender.com'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
