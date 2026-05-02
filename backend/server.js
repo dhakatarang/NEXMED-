@@ -39,7 +39,7 @@ const licensesDir = path.join(uploadsBaseDir, 'licenses');
 const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:5173', 
-  'https://nexmed-1.onrender.com',
+  'https://nexmed-backend.onrender.com/',
   'https://nexmed.onrender.com'
 ];
 
