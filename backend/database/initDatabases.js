@@ -188,7 +188,26 @@ function initAllDatabases() {
     addSampleData();
   }, 1000);
 }
-
+// Add this after the orders table creation in initAllDatabases() function
+mainDB.run(`CREATE TABLE IF NOT EXISTS equipment_scans (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  equipment_id INTEGER,
+  equipment_name TEXT NOT NULL,
+  image_path TEXT,
+  condition_result TEXT,
+  overall_condition TEXT,
+  confidence_score INTEGER,
+  scanned_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (equipment_id) REFERENCES equipments(id) ON DELETE SET NULL
+)`, (err) => {
+  if (err) {
+    console.error('❌ Error creating equipment_scans table:', err);
+  } else {
+    console.log('✅ Equipment scans table created/verified');
+  }
+});
 function addMissingColumns() {
   console.log('🔧 Adding missing columns...');
   

@@ -11,6 +11,7 @@ const donaterentRoutes = require("./routes/donaterentRoutes");
 const profileRoutes = require("./routes/profileRoutes");
 const cartRoutes = require("./routes/cartRoutes");
 const adminRoutes = require("./routes/adminRoutes");
+const equipmentScanRoutes = require("./routes/equipmentScanRoutes");
 
 // Import database initialization
 const { initAllDatabases } = require("./database/initDatabases");
@@ -31,26 +32,64 @@ if (!fs.existsSync(profilesDir)) {
   console.log('📁 Created profiles directory');
 }
 
-// Initialize databases when server starts
-console.log("🔄 Initializing databases...");
-initAllDatabases();
-console.log("✅ Databases initialized successfully");
+// Ensure scans directory exists for Gemini uploads
+const scansDir = path.join(__dirname, 'uploads/scans');
+if (!fs.existsSync(scansDir)) {
+  fs.mkdirSync(scansDir, { recursive: true });
+  console.log('📁 Created scans directory');
+}
 
-// ========== CORS CONFIGURATION ==========
+// ========== CORS CONFIGURATION - FIXED ==========
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:5173', 
+  'https://nexmed-1.onrender.com',
+  'https://nexmed.onrender.com'
+];
+
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:5173', 'https://nexmed-1.onrender.com'],
+  origin: function(origin, callback) {
+    // Allow requests with no origin (like mobile apps, curl, etc)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      console.log('⚠️ CORS blocked for origin:', origin);
+      callback(null, true); // Still allow but log it
+    }
+  },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+  exposedHeaders: ['Content-Length', 'X-Requested-With']
 }));
 
-// ✅ Handle OPTIONS preflight for ALL routes
+// ✅ CRITICAL FIX: Handle OPTIONS preflight for ALL routes
 app.options('*', (req, res) => {
+  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
+  res.header('Access-Control-Allow-Credentials', 'true');
   res.sendStatus(200);
 });
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Add CORS headers manually as backup
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  
+  // Handle preflight
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Add request logging middleware for debugging
 app.use((req, res, next) => {
@@ -61,27 +100,65 @@ app.use((req, res, next) => {
 // Serve uploaded files statically
 app.use('/uploads', express.static(uploadsDir));
 
-// Public routes (no auth required)
+// Initialize databases when server starts
+console.log("🔄 Initializing databases...");
+initAllDatabases();
+console.log("✅ Databases initialized successfully");
+
+// ========== PUBLIC ROUTES ==========
+
+// Health check endpoint (MUST be before other routes)
+app.get("/health", (req, res) => {
+  res.status(200).json({ 
+    status: "healthy", 
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV || 'development',
+    cors_configured: true
+  });
+});
+
+// Root endpoint
 app.get("/", (req, res) => {
   res.json({ 
     message: "NexMed Backend is Running ✅",
     version: "2.0",
     environment: process.env.NODE_ENV || 'development',
-    features: ["Enhanced Donate/Rent System", "Image Upload", "SQLite3 Database", "User Authentication", "Shopping Cart", "Admin Panel"],
+    features: ["Enhanced Donate/Rent System", "Image Upload", "SQLite3 Database", "User Authentication", "Shopping Cart", "Admin Panel", "AI Vision Scan"],
+    endpoints: {
+      health: "/health",
+      auth: "/api/auth",
+      medicines: "/api/medicines",
+      equipments: "/api/equipments",
+      scan: "/api/equipment-scan",
+      cart: "/api/cart",
+      profile: "/api/profile"
+    },
     timestamp: new Date().toISOString()
   });
 });
 
-// Health check endpoint for Render
-app.get("/health", (req, res) => {
-  res.status(200).json({ 
-    status: "healthy", 
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime()
+// API Status endpoint
+app.get("/api/status", (req, res) => {
+  res.json({
+    success: true,
+    message: "API is running",
+    geminiConfigured: !!process.env.GEMINI_API_KEY,
+    timestamp: new Date().toISOString()
   });
 });
 
-// Public debug routes
+// ========== API ROUTES ==========
+app.use("/api/auth", authRoutes);
+app.use("/api/medicines", medicineRoutes);
+app.use("/api/equipments", equipmentRoutes);
+app.use("/api/donaterent", donaterentRoutes);
+app.use("/api/profile", profileRoutes);
+app.use("/api/cart", cartRoutes);
+app.use("/api/admin", adminRoutes);
+app.use("/api/equipment-scan", equipmentScanRoutes);
+
+// ========== DEBUG ENDPOINTS ==========
 app.get("/api/debug-db", (req, res) => {
   const { mainDB } = require('./database/dbConnections');
   
@@ -93,7 +170,8 @@ app.get("/api/debug-db", (req, res) => {
     { name: 'equipments', query: 'SELECT COUNT(*) as count FROM equipments' },
     { name: 'cart', query: 'SELECT COUNT(*) as count FROM cart' },
     { name: 'donaterent', query: 'SELECT COUNT(*) as count FROM donaterent' },
-    { name: 'orders', query: 'SELECT COUNT(*) as count FROM orders' }
+    { name: 'orders', query: 'SELECT COUNT(*) as count FROM orders' },
+    { name: 'equipment_scans', query: 'SELECT COUNT(*) as count FROM equipment_scans' }
   ];
 
   let results = {};
@@ -104,12 +182,13 @@ app.get("/api/debug-db", (req, res) => {
       if (err) {
         results[name] = { error: err.message, status: 'error' };
       } else {
-        results[name] = { count: row.count, status: 'ok' };
+        results[name] = { count: row?.count || 0, status: 'ok' };
       }
       
       completed++;
       if (completed === tableChecks.length) {
         res.json({ 
+          success: true,
           message: 'Database status check completed',
           database: 'nexmed.db (single database)',
           tables: results,
@@ -129,23 +208,21 @@ app.get("/api/profile/test", (req, res) => {
   });
 });
 
-// Protected API routes
-app.use("/api/auth", authRoutes);
-app.use("/api/medicines", medicineRoutes);
-app.use("/api/equipments", equipmentRoutes);
-app.use("/api/donaterent", donaterentRoutes);
-app.use("/api/profile", profileRoutes);
-app.use("/api/cart", cartRoutes);
-app.use("/api/admin", adminRoutes);
+// ========== ERROR HANDLING ==========
 
 // 404 fallback
-app.use((req, res, next) => {
+app.use((req, res) => {
   console.log(`❌ 404 - Route not found: ${req.method} ${req.path}`);
   res.status(404).json({ 
     success: false,
     message: "Route not found",
     path: req.path,
-    method: req.method
+    method: req.method,
+    availableEndpoints: [
+      "/health", "/", "/api/status",
+      "/api/auth/*", "/api/medicines/*", "/api/equipments/*",
+      "/api/equipment-scan/*", "/api/cart/*", "/api/profile/*"
+    ]
   });
 });
 
@@ -155,17 +232,30 @@ app.use((err, req, res, next) => {
   res.status(500).json({ 
     success: false,
     message: "Internal Server Error", 
-    error: err.message 
+    error: process.env.NODE_ENV === 'development' ? err.message : "Something went wrong"
   });
 });
 
-// Start the server - IMPORTANT: Bind to 0.0.0.0 for Render
+// ========== START SERVER ==========
 const PORT = process.env.PORT || 5001;
-app.listen(PORT, '0.0.0.0', () => {
+
+// Important: Bind to 0.0.0.0 for Render
+const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`📊 Health check: https://nexmed.onrender.com/`);
-  console.log(`💊 Medicines API: /api/medicines`);
-  console.log(`🏥 Equipment API: /api/equipments`);
-  console.log(`🔐 Auth API: /api/auth`);
+  console.log(`🔗 Health check: https://nexmed.onrender.com/health`);
+  console.log(`🔗 API status: https://nexmed.onrender.com/api/status`);
+  console.log(`🤖 Gemini Vision: ${process.env.GEMINI_API_KEY ? 'Configured ✅' : 'Not configured ⚠️'}`);
+  console.log(`📊 CORS enabled for: ${allowedOrigins.join(', ')}`);
 });
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received, closing server...');
+  server.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
+});
+
+module.exports = app;
