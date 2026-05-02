@@ -3,67 +3,50 @@ const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const fs = require('fs');
 
-// Determine storage location
+// Simple working configuration for Render free tier
 const isRender = !!process.env.RENDER;
-const isProduction = process.env.NODE_ENV === 'production';
 
 let dbDir;
-if (isRender) {
-  // On Render, use the persistent disk mounted at /data
-  dbDir = '/data';
-  console.log('📊 Running on Render - using persistent storage at /data');
-} else {
-  // Local development
-  dbDir = path.join(__dirname, '../databases');
-}
-
-// Ensure database directory exists
-if (!fs.existsSync(dbDir)) {
-  fs.mkdirSync(dbDir, { recursive: true });
-  console.log(`📁 Created database directory: ${dbDir}`);
-}
-
-// Ensure uploads directories exist (use persistent storage on Render)
 let uploadsBaseDir;
+
 if (isRender) {
-  uploadsBaseDir = path.join('/data', 'uploads');
+  // Use app's own directory - it's writable on free tier
+  dbDir = path.join(__dirname, '../data');
+  uploadsBaseDir = path.join(__dirname, '../uploads');
+  console.log('📊 Render free tier mode - using app directory');
 } else {
+  dbDir = path.join(__dirname, '../databases');
   uploadsBaseDir = path.join(__dirname, '../uploads');
 }
 
-const uploadsDirs = [
-  uploadsBaseDir,
-  path.join(uploadsBaseDir, 'items'),
-  path.join(uploadsBaseDir, 'profiles'),
-  path.join(uploadsBaseDir, 'licenses'),
-  path.join(uploadsBaseDir, 'scans')
-];
-
-uploadsDirs.forEach(dir => {
+// Create directories
+[dbDir, uploadsBaseDir].forEach(dir => {
   if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-    console.log(`📁 Created uploads directory: ${dir}`);
+    try {
+      fs.mkdirSync(dir, { recursive: true });
+      console.log(`📁 Created: ${dir}`);
+    } catch(e) { console.error(`Failed: ${dir}`, e.message); }
   }
 });
 
-// Database file path - store on persistent disk
-const dbPath = path.join(dbDir, 'nexmed.db');
-console.log('📊 Database path:', dbPath);
+// Create upload subdirectories
+['items', 'profiles', 'licenses', 'scans'].forEach(sub => {
+  const dir = path.join(uploadsBaseDir, sub);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+});
 
-// Create database connection
+const dbPath = path.join(dbDir, 'nexmed.db');
+console.log('📊 Database:', dbPath);
+
 const mainDB = new sqlite3.Database(dbPath, sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE, (err) => {
   if (err) {
-    console.error('❌ Error connecting to database:', err.message);
+    console.error('❌ DB Error:', err.message);
   } else {
-    console.log('✅ Connected to SQLite database');
-    // Enable foreign keys and WAL mode for better performance
+    console.log('✅ Database connected');
     mainDB.run('PRAGMA foreign_keys = ON');
-    mainDB.run('PRAGMA journal_mode = WAL');
-    mainDB.run('PRAGMA synchronous = NORMAL'); // Good balance of safety and performance
   }
 });
 
-// Export both database connection AND uploads path for other modules
 module.exports = {
   mainDB,
   authDB: mainDB,
@@ -72,5 +55,5 @@ module.exports = {
   donateRentDB: mainDB,
   profileDB: mainDB,
   dbPaths: { main: dbPath },
-  uploadsBaseDir: uploadsBaseDir  // Export this so other modules know where to store files
+  uploadsBaseDir: uploadsBaseDir
 };
