@@ -1,28 +1,34 @@
-# Environment variables (KEEPS YOUR .env PRIVATE)
-.env
-.env.local
-.env.production
-
 # Dependencies
 node_modules/
 package-lock.json
 
-# Database
-*.db
-*.sqlite
-backend/databases/
+# Environment variables
+.env
+.env.local
+.env.production
 
-# Uploaded files
-backend/uploads/*
-!backend/uploads/.gitkeep
+# Database files
+*.db
+*.db-journal
+databases/
+
+# Uploads (will be on persistent disk)
+uploads/
 
 # Logs
 *.log
+npm-debug.log*
 
 # OS files
 .DS_Store
 Thumbs.db
 
-# IDE
+# IDE files
 .vscode/
 .idea/
+*.swp
+*.swo
+
+# Build files
+dist/
+build/
