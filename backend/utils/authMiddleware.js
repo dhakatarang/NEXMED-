@@ -1,86 +1,83 @@
-// backend/utils/authMiddleware.js
-const { mainDB } = require('../database/dbConnections');
-
-const authMiddleware = (req, res, next) => {
-  const authHeader = req.header('Authorization');
-  console.log('🔐 Auth Header:', authHeader);
-  
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    console.log('❌ No valid authorization header');
-    return res.status(401).json({ 
-      success: false, 
-      message: 'No token provided, authorization denied' 
-    });
-  }
-
-  const token = authHeader.replace('Bearer ', '');
-  console.log('🔐 Extracted Token:', token);
-  
-  if (!token) {
-    console.log('❌ No token after Bearer');
-    return res.status(401).json({ 
-      success: false, 
-      message: 'No token provided, authorization denied' 
-    });
-  }
-
+const login = async (req, res) => {
   try {
-    // For now, we'll use a simple user ID from token
-    const userId = parseInt(token);
-    
-    if (!userId || isNaN(userId)) {
-      console.log('❌ Invalid token format - not a number:', token);
-      return res.status(401).json({ 
+    const { email, password } = req.body;
+
+    console.log('🔐 Login attempt for:', email);
+
+    if (!email || !password) {
+      return res.status(400).json({ 
         success: false, 
-        message: 'Invalid token format' 
+        message: 'Email and password are required' 
       });
     }
 
-    console.log('🔍 Looking for user with ID:', userId);
-
-    // Verify user exists in database
     mainDB.get(
-      "SELECT id, name, email, user_type FROM users WHERE id = ?",
-      [userId],
-      (err, user) => {
+      "SELECT * FROM users WHERE email = ?",
+      [email],
+      async (err, user) => {
         if (err) {
-          console.error('❌ Database error in auth middleware:', err);
+          console.error('❌ Database error during login:', err);
           return res.status(500).json({ 
             success: false, 
-            message: 'Server error during authentication' 
-          });
-        }
-        
-        if (!user) {
-          console.log('❌ User not found for ID:', userId);
-          return res.status(401).json({ 
-            success: false, 
-            message: 'User not found' 
+            message: 'Database error during login' 
           });
         }
 
-        console.log('✅ User authenticated:', user.name);
+        if (!user) {
+          return res.status(400).json({ 
+            success: false, 
+            message: 'Invalid email or password' 
+          });
+        }
+
+        // Check if email is verified
+        if (!user.email_verified) {
+          return res.status(403).json({ 
+            success: false, 
+            message: 'Please verify your email before logging in.' 
+          });
+        }
+
+        // Check if user is active
+        if (user.is_active === 0) {
+          return res.status(403).json({ 
+            success: false, 
+            message: 'Your account has been deactivated.' 
+          });
+        }
+
+        // Check password
+        const isPasswordValid = await bcrypt.compare(password, user.password);
+        if (!isPasswordValid) {
+          return res.status(400).json({ 
+            success: false, 
+            message: 'Invalid email or password' 
+          });
+        }
+
+        // Return user data (without password)
+        const { password: _, ...userData } = user;
         
-        // Make sure user object is properly attached to req
-        req.userId = user.id;
-        req.user = {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          user_type: user.user_type
-        };
+        // IMPORTANT: Return user ID as token (since your middleware uses simple token)
+        const token = user.id.toString(); // Convert to string for consistency
         
-        console.log('👤 req.user set to:', req.user);
-        next();
+        console.log('✅ Login successful for:', user.email);
+        console.log('🔑 Token (User ID):', token);
+        
+        res.json({
+          success: true,
+          message: 'Login successful',
+          user: userData,
+          token: token  // Return user ID as token
+        });
       }
     );
+
   } catch (error) {
-    console.error('❌ Auth middleware error:', error);
-    res.status(401).json({ 
+    console.error('❌ Server error during login:', error);
+    res.status(500).json({ 
       success: false, 
-      message: 'Token is not valid' 
+      message: 'Server error during login'
     });
   }
 };
-
-module.exports = { authMiddleware };
