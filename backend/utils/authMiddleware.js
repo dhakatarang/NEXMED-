@@ -1,83 +1,89 @@
-const login = async (req, res) => {
+
+const jwt = require('jsonwebtoken');
+const { mainDB } = require('../database/dbConnections');
+
+const authMiddleware = (req, res, next) => {
   try {
-    const { email, password } = req.body;
-
-    console.log('🔐 Login attempt for:', email);
-
-    if (!email || !password) {
-      return res.status(400).json({ 
+    // Get token from Authorization header
+    const authHeader = req.header('Authorization');
+    
+    console.log('🔑 Auth header:', authHeader);
+    
+    if (!authHeader) {
+      console.log('❌ No Authorization header');
+      return res.status(401).json({ 
         success: false, 
-        message: 'Email and password are required' 
+        message: 'Access denied. No token provided.' 
       });
     }
 
-    mainDB.get(
-      "SELECT * FROM users WHERE email = ?",
-      [email],
-      async (err, user) => {
-        if (err) {
-          console.error('❌ Database error during login:', err);
-          return res.status(500).json({ 
+    // Extract token - handle both "Bearer token" and just "token"
+    let token = authHeader;
+    if (authHeader.startsWith('Bearer ')) {
+      token = authHeader.substring(7);
+    }
+
+    console.log('🔑 Extracted token:', token);
+
+    if (!token || token === 'null' || token === 'undefined') {
+      console.log('❌ Invalid token format');
+      return res.status(401).json({ 
+        success: false, 
+        message: 'Access denied. Invalid token format.' 
+      });
+    }
+
+    // Check if token is a user ID (for development without JWT)
+    if (/^\d+$/.test(token)) {
+      const userId = parseInt(token);
+      console.log('✅ Using user ID as token:', userId);
+      
+      // Verify user exists in database
+      mainDB.get('SELECT id FROM users WHERE id = ?', [userId], (err, user) => {
+        if (err || !user) {
+          return res.status(401).json({ 
             success: false, 
-            message: 'Database error during login' 
+            message: 'Invalid user token' 
           });
         }
+        req.userId = userId;
+        next();
+      });
+      return;
+    }
 
-        if (!user) {
-          return res.status(400).json({ 
-            success: false, 
-            message: 'Invalid email or password' 
-          });
-        }
-
-        // Check if email is verified
-        if (!user.email_verified) {
-          return res.status(403).json({ 
-            success: false, 
-            message: 'Please verify your email before logging in.' 
-          });
-        }
-
-        // Check if user is active
-        if (user.is_active === 0) {
-          return res.status(403).json({ 
-            success: false, 
-            message: 'Your account has been deactivated.' 
-          });
-        }
-
-        // Check password
-        const isPasswordValid = await bcrypt.compare(password, user.password);
-        if (!isPasswordValid) {
-          return res.status(400).json({ 
-            success: false, 
-            message: 'Invalid email or password' 
-          });
-        }
-
-        // Return user data (without password)
-        const { password: _, ...userData } = user;
-        
-        // IMPORTANT: Return user ID as token (since your middleware uses simple token)
-        const token = user.id.toString(); // Convert to string for consistency
-        
-        console.log('✅ Login successful for:', user.email);
-        console.log('🔑 Token (User ID):', token);
-        
-        res.json({
-          success: true,
-          message: 'Login successful',
-          user: userData,
-          token: token  // Return user ID as token
-        });
-      }
-    );
-
+    // Verify JWT token
+    const secret = process.env.JWT_SECRET || 'your-secret-key';
+    const decoded = jwt.verify(token, secret);
+    
+    req.userId = decoded.userId;
+    req.userEmail = decoded.email;
+    
+    console.log('✅ Auth success for user:', req.userId);
+    next();
+    
   } catch (error) {
-    console.error('❌ Server error during login:', error);
+    console.error('❌ Auth middleware error:', error.message);
+    
+    if (error.name === 'JsonWebTokenError') {
+      return res.status(401).json({ 
+        success: false, 
+        message: 'Invalid token. Please login again.' 
+      });
+    }
+    
+    if (error.name === 'TokenExpiredError') {
+      return res.status(401).json({ 
+        success: false, 
+        message: 'Token expired. Please login again.' 
+      });
+    }
+    
     res.status(500).json({ 
       success: false, 
-      message: 'Server error during login'
+      message: 'Authentication error. Please try again.' 
     });
   }
 };
+
+module.exports = { authMiddleware };

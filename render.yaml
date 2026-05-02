@@ -1,11 +1,10 @@
-@"
 services:
   - type: web
     name: nexmed-backend
     runtime: node
     plan: free
-    buildCommand: cd backend && npm install
-    startCommand: cd backend && node server.js
+    buildCommand: npm install  # Remove 'cd backend &&'
+    startCommand: node server.js  # Remove 'cd backend &&'
     envVars:
       - key: NODE_ENV
         value: production
@@ -25,4 +24,3 @@ services:
       name: nexmed-data
       mountPath: /data
       sizeGB: 1
-"@ | Out-File -FilePath render.yaml -Encoding utf8
