@@ -1,43 +1,50 @@
-// backend/routes/profileRoutes.js
 const express = require("express");
 const router = express.Router();
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 const { authMiddleware } = require("../utils/authMiddleware");
-const { mainDB } = require("../database/dbConnections");
+const { mainDB, uploadsBaseDir } = require("../database/dbConnections");
 
-// Ensure uploads/profiles exists
-const profilesDir = path.join(__dirname, "../uploads/profiles");
-if (!fs.existsSync(profilesDir)) fs.mkdirSync(profilesDir, { recursive: true });
+// Use persistent storage directory for profiles
+const profilesDir = path.join(uploadsBaseDir, "profiles");
+if (!fs.existsSync(profilesDir)) {
+  fs.mkdirSync(profilesDir, { recursive: true });
+  console.log(`📁 Created profiles directory: ${profilesDir}`);
+}
 
-// Multer config - store profile photos in uploads/profiles
+// Multer config - store profile photos in persistent storage
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, profilesDir),
+  destination: (req, file, cb) => {
+    cb(null, profilesDir);
+  },
   filename: (req, file, cb) => {
     const ext = path.extname(file.originalname);
     const safe = `profile_${req.userId || "unknown"}_${Date.now()}${ext}`;
     cb(null, safe);
   }
 });
+
 const upload = multer({
   storage,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
   fileFilter: (req, file, cb) => {
     const allowed = ["image/jpeg", "image/png", "image/jpg"];
-    if (allowed.includes(file.mimetype)) cb(null, true);
-    else cb(new Error("Invalid file type"));
+    if (allowed.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Invalid file type. Only JPEG, PNG, JPG allowed."));
+    }
   }
 });
 
 // GET /api/profile
-// returns { success: true, profile: {...}, contributions: { medicines:[], equipments:[] } }
 router.get("/", authMiddleware, (req, res) => {
   try {
     const userId = req.userId || req.user?.id;
     if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
 
-    // Get latest user data from DB (including profile_photo path and DOB etc)
+    // Get latest user data from DB
     mainDB.get(
       `SELECT id, name, email, user_type, medical_license_path, profile_photo, phone, address, date_of_birth, created_at FROM users WHERE id = ?`,
       [userId],
@@ -80,8 +87,7 @@ router.get("/", authMiddleware, (req, res) => {
   }
 });
 
-// PUT /api/profile
-// Update basic profile fields and optionally profile photo (multipart/form-data)
+// PUT /api/profile - Update profile with photo upload
 router.put("/", authMiddleware, upload.single("profile_photo"), (req, res) => {
   try {
     const userId = req.userId || req.user?.id;
@@ -92,26 +98,45 @@ router.put("/", authMiddleware, upload.single("profile_photo"), (req, res) => {
     const updates = [];
     const params = [];
 
-    if (name) { updates.push("name = ?"); params.push(name); }
-    if (email) { updates.push("email = ?"); params.push(email); }
-    if (user_type) { updates.push("user_type = ?"); params.push(user_type); }
-    if (phone) { updates.push("phone = ?"); params.push(phone); }
-    if (address) { updates.push("address = ?"); params.push(address); }
-    if (date_of_birth) { updates.push("date_of_birth = ?"); params.push(date_of_birth); }
+    if (name && name.trim()) { 
+      updates.push("name = ?"); 
+      params.push(name.trim()); 
+    }
+    if (email && email.trim()) { 
+      updates.push("email = ?"); 
+      params.push(email.trim()); 
+    }
+    if (user_type && user_type.trim()) { 
+      updates.push("user_type = ?"); 
+      params.push(user_type.trim()); 
+    }
+    if (phone && phone.trim()) { 
+      updates.push("phone = ?"); 
+      params.push(phone.trim()); 
+    }
+    if (address && address.trim()) { 
+      updates.push("address = ?"); 
+      params.push(address.trim()); 
+    }
+    if (date_of_birth) { 
+      updates.push("date_of_birth = ?"); 
+      params.push(date_of_birth); 
+    }
 
-    // If file uploaded, store filename (just filename, path will be /uploads/profiles/filename)
+    // If file uploaded, store filename
     if (req.file) {
       updates.push("profile_photo = ?");
       params.push(req.file.filename);
+      console.log(`📸 Uploaded profile photo: ${req.file.filename}`);
     }
 
     if (updates.length === 0) {
-      // nothing to update
       return res.status(400).json({ success: false, message: "No update data provided" });
     }
 
     params.push(userId);
     const sql = `UPDATE users SET ${updates.join(", ")}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`;
+    
     mainDB.run(sql, params, function (err) {
       if (err) {
         console.error("❌ Error updating user:", err);

@@ -15,31 +15,27 @@ const equipmentScanRoutes = require("./routes/equipmentScanRoutes");
 
 // Import database initialization
 const { initAllDatabases } = require("./database/initDatabases");
+const { uploadsBaseDir } = require("./database/dbConnections");
 
 const app = express();
 
-// Ensure uploads directory exists
-const uploadsDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
-  console.log('📁 Created uploads directory');
-}
+// ========== USE PERSISTENT STORAGE DIRECTORIES ==========
+console.log('📁 Using persistent uploads directory:', uploadsBaseDir);
 
-// Ensure profiles directory exists
-const profilesDir = path.join(__dirname, 'uploads/profiles');
-if (!fs.existsSync(profilesDir)) {
-  fs.mkdirSync(profilesDir, { recursive: true });
-  console.log('📁 Created profiles directory');
-}
+// Ensure all upload subdirectories exist in persistent storage
+const profilesDir = path.join(uploadsBaseDir, 'profiles');
+const scansDir = path.join(uploadsBaseDir, 'scans');
+const itemsDir = path.join(uploadsBaseDir, 'items');
+const licensesDir = path.join(uploadsBaseDir, 'licenses');
 
-// Ensure scans directory exists for Gemini uploads
-const scansDir = path.join(__dirname, 'uploads/scans');
-if (!fs.existsSync(scansDir)) {
-  fs.mkdirSync(scansDir, { recursive: true });
-  console.log('📁 Created scans directory');
-}
+[profilesDir, scansDir, itemsDir, licensesDir].forEach(dir => {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+    console.log(`📁 Created directory: ${dir}`);
+  }
+});
 
-// ========== CORS CONFIGURATION - FIXED ==========
+// ========== CORS CONFIGURATION ==========
 const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:5173', 
@@ -65,7 +61,7 @@ app.use(cors({
   exposedHeaders: ['Content-Length', 'X-Requested-With']
 }));
 
-// ✅ CRITICAL FIX: Handle OPTIONS preflight for ALL routes
+// Handle OPTIONS preflight for ALL routes
 app.options('*', (req, res) => {
   res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
@@ -97,8 +93,8 @@ app.use((req, res, next) => {
   next();
 });
 
-// Serve uploaded files statically
-app.use('/uploads', express.static(uploadsDir));
+// Serve uploaded files statically from persistent storage
+app.use('/uploads', express.static(uploadsBaseDir));
 
 // Initialize databases when server starts
 console.log("🔄 Initializing databases...");
@@ -107,13 +103,14 @@ console.log("✅ Databases initialized successfully");
 
 // ========== PUBLIC ROUTES ==========
 
-// Health check endpoint (MUST be before other routes)
+// Health check endpoint
 app.get("/health", (req, res) => {
   res.status(200).json({ 
     status: "healthy", 
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     environment: process.env.NODE_ENV || 'development',
+    storageLocation: process.env.RENDER ? '/data (persistent)' : 'local',
     cors_configured: true
   });
 });
@@ -124,6 +121,7 @@ app.get("/", (req, res) => {
     message: "NexMed Backend is Running ✅",
     version: "2.0",
     environment: process.env.NODE_ENV || 'development',
+    storageLocation: process.env.RENDER ? 'Persistent (data persists after restart)' : 'Local',
     features: ["Enhanced Donate/Rent System", "Image Upload", "SQLite3 Database", "User Authentication", "Shopping Cart", "Admin Panel", "AI Vision Scan"],
     endpoints: {
       health: "/health",
@@ -144,6 +142,7 @@ app.get("/api/status", (req, res) => {
     success: true,
     message: "API is running",
     geminiConfigured: !!process.env.GEMINI_API_KEY,
+    storageLocation: process.env.RENDER ? '/data (persistent)' : 'local',
     timestamp: new Date().toISOString()
   });
 });
@@ -190,13 +189,52 @@ app.get("/api/debug-db", (req, res) => {
         res.json({ 
           success: true,
           message: 'Database status check completed',
-          database: 'nexmed.db (single database)',
+          database: 'nexmed.db (persistent storage)',
+          storageLocation: process.env.RENDER ? '/data/nexmed.db' : 'local',
           tables: results,
           timestamp: new Date().toISOString()
         });
       }
     });
   });
+});
+
+// Test persistence endpoint
+app.get("/api/test-persistence", (req, res) => {
+  const { mainDB, uploadsBaseDir } = require('./database/dbConnections');
+  const fs = require('fs');
+  const path = require('path');
+  
+  const testFile = path.join(uploadsBaseDir, 'test.txt');
+  const testMessage = `Persistence test at ${new Date().toISOString()}`;
+  
+  try {
+    // Write test file
+    fs.writeFileSync(testFile, testMessage);
+    
+    // Read it back
+    const content = fs.readFileSync(testFile, 'utf8');
+    
+    // Check database
+    mainDB.get("SELECT COUNT(*) as count FROM users", (err, row) => {
+      res.json({
+        success: true,
+        message: "Persistence test completed",
+        fileWritten: testMessage,
+        fileRead: content,
+        userCount: row?.count || 0,
+        storageLocation: process.env.RENDER ? '/data on Render (persistent)' : 'local',
+        uploadsPath: uploadsBaseDir,
+        timestamp: new Date().toISOString()
+      });
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      storageLocation: process.env.RENDER ? '/data on Render' : 'local'
+    });
+  }
 });
 
 // Test profile endpoint directly
@@ -219,7 +257,7 @@ app.use((req, res) => {
     path: req.path,
     method: req.method,
     availableEndpoints: [
-      "/health", "/", "/api/status",
+      "/health", "/", "/api/status", "/api/test-persistence", "/api/debug-db",
       "/api/auth/*", "/api/medicines/*", "/api/equipments/*",
       "/api/equipment-scan/*", "/api/cart/*", "/api/profile/*"
     ]
@@ -243,8 +281,10 @@ const PORT = process.env.PORT || 5001;
 const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`💾 Storage location: ${process.env.RENDER ? '/data (PERSISTENT)' : 'Local'}`);
   console.log(`🔗 Health check: https://nexmed.onrender.com/health`);
   console.log(`🔗 API status: https://nexmed.onrender.com/api/status`);
+  console.log(`🔗 Test persistence: https://nexmed.onrender.com/api/test-persistence`);
   console.log(`🤖 Gemini Vision: ${process.env.GEMINI_API_KEY ? 'Configured ✅' : 'Not configured ⚠️'}`);
   console.log(`📊 CORS enabled for: ${allowedOrigins.join(', ')}`);
 });

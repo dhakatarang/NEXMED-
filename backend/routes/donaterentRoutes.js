@@ -2,15 +2,16 @@ const express = require("express");
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
-const { mainDB } = require("../database/dbConnections");
+const { mainDB, uploadsBaseDir } = require("../database/dbConnections");
 const { authMiddleware } = require("../utils/authMiddleware");
 
 const router = express.Router();
 
-// Ensure uploads directory exists
-const uploadsDir = path.join(__dirname, '../uploads/items');
+// Use persistent storage directory for items
+const uploadsDir = path.join(uploadsBaseDir, 'items');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
+  console.log(`📁 Created items uploads directory: ${uploadsDir}`);
 }
 
 // Configure multer for file uploads
@@ -73,7 +74,7 @@ router.get("/debug-schema", (req, res) => {
   });
 });
 
-// Add item to donaterent (Protected route) - SIMPLIFIED VERSION
+// Add item to donaterent (Protected route)
 router.post("/add", authMiddleware, upload.single('image'), handleMulterError, async (req, res) => {
   try {
     console.log('📦 Starting item addition process...');
@@ -134,9 +135,10 @@ router.post("/add", authMiddleware, upload.single('image'), handleMulterError, a
       });
     }
 
+    // Store relative path for web access (not full filesystem path)
     const image_path = req.file ? `items/${req.file.filename}` : null;
 
-    // First, let's just insert into donaterent table (simplified)
+    // Insert into donaterent table
     console.log('💾 Inserting into donaterent table...');
     
     const donaterentQuery = `
@@ -145,8 +147,7 @@ router.post("/add", authMiddleware, upload.single('image'), handleMulterError, a
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
-    // For now, set item_id to 0 since we're not creating medicines/equipments yet
-    const item_id = 0;
+    const item_id = 0; // Temporary, will be updated after adding to specific table
 
     mainDB.run(donaterentQuery, [
       userId,           // user_id
@@ -166,9 +167,13 @@ router.post("/add", authMiddleware, upload.single('image'), handleMulterError, a
         console.error('❌ Error details:', err.message);
         
         // Clean up uploaded file if database error
-        if (req.file) {
-          fs.unlinkSync(req.file.path);
-          console.log('🗑️ Cleaned up uploaded file due to error');
+        if (req.file && req.file.path) {
+          try {
+            fs.unlinkSync(req.file.path);
+            console.log('🗑️ Cleaned up uploaded file due to error');
+          } catch (unlinkErr) {
+            console.error('Error cleaning up file:', unlinkErr);
+          }
         }
         
         return res.status(500).json({ 
@@ -182,15 +187,10 @@ router.post("/add", authMiddleware, upload.single('image'), handleMulterError, a
       const donaterentId = this.lastID;
       console.log(`✅ Item added to donaterent with ID: ${donaterentId}`);
 
-      // Now try to add to the respective table (medicines or equipments)
+      // Add to the respective table (medicines or equipments)
       addToSpecificTable(itemType, optionType, name, description, quantity, price, rentPrice, duration, image_path, userId, donaterentId)
         .then(() => {
-          // Update donaterent with the actual item_id
-          if (itemType === 'medicine' || itemType === 'medicalequipment') {
-            // We'll update this after the specific table insertion
-            console.log(`🔄 Donaterent record ${donaterentId} completed`);
-          }
-
+          console.log(`🔄 Donaterent record ${donaterentId} completed`);
           res.json({
             success: true,
             message: "Item added successfully!",
@@ -200,7 +200,6 @@ router.post("/add", authMiddleware, upload.single('image'), handleMulterError, a
         })
         .catch((error) => {
           console.error('❌ Error adding to specific table, but donaterent was saved:', error);
-          // Even if specific table fails, donaterent was successful
           res.json({
             success: true,
             message: "Item added to donations! (Some features may be limited)",
@@ -209,14 +208,17 @@ router.post("/add", authMiddleware, upload.single('image'), handleMulterError, a
             warning: "Item was added to donations but there was an issue with the specific category"
           });
         });
-
     });
 
   } catch (error) {
     console.error('❌ Server error in donaterent/add:', error);
     // Clean up uploaded file on server error
-    if (req.file) {
-      fs.unlinkSync(req.file.path);
+    if (req.file && req.file.path) {
+      try {
+        fs.unlinkSync(req.file.path);
+      } catch (unlinkErr) {
+        console.error('Error cleaning up file:', unlinkErr);
+      }
     }
     res.status(500).json({
       success: false,
@@ -281,7 +283,7 @@ function addToSpecificTable(itemType, optionType, name, description, quantity, p
         price ? parseFloat(price) : 0,
         rentPrice ? parseFloat(rentPrice) : 0,
         duration ? parseInt(duration) : 0, 
-        image_path, userId, 'good' // default condition
+        image_path, userId, 'good'
       ], function(err) {
         if (err) {
           console.error('❌ Error adding to equipments:', err);
@@ -304,7 +306,7 @@ function addToSpecificTable(itemType, optionType, name, description, quantity, p
         }
       });
     } else {
-      resolve(); // Not a specific type, just resolve
+      resolve();
     }
   });
 }
@@ -329,6 +331,8 @@ router.get("/all", (req, res) => {
       
       const items = rows.map(item => ({
         ...item,
+        // Convert image_path to full URL if needed
+        image_path: item.image_path ? `/uploads/${item.image_path}` : null,
         user: {
           id: item.user_id,
           name: item.user_name
@@ -350,7 +354,6 @@ router.get("/test-add", authMiddleware, (req, res) => {
   
   console.log('🧪 Testing item addition...');
   
-  // Test with simple data
   const testQuery = `
     INSERT INTO donaterent 
     (user_id, item_type, item_id, option_type, name, description, quantity, price, image_path)

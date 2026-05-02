@@ -1,6 +1,6 @@
 // backend/controllers/authController.js
 const bcrypt = require('bcryptjs');
-const { mainDB } = require('../database/dbConnections');
+const { mainDB, uploadsBaseDir } = require('../database/dbConnections');
 const path = require('path');
 const fs = require('fs');
 const { markEmailAsVerified } = require('../utils/otpService');
@@ -14,8 +14,8 @@ const signup = async (req, res) => {
 
     // Validation
     if (!name || !email || !password || !userType) {
-      if (medicalLicense) {
-        fs.unlinkSync(medicalLicense.path);
+      if (medicalLicense && medicalLicense.path) {
+        try { fs.unlinkSync(medicalLicense.path); } catch(e) {}
       }
       return res.status(400).json({ 
         success: false, 
@@ -25,8 +25,8 @@ const signup = async (req, res) => {
 
     // Check if email is verified (for OTP flow)
     if (!isEmailVerified || isEmailVerified !== 'true') {
-      if (medicalLicense) {
-        fs.unlinkSync(medicalLicense.path);
+      if (medicalLicense && medicalLicense.path) {
+        try { fs.unlinkSync(medicalLicense.path); } catch(e) {}
       }
       return res.status(400).json({ 
         success: false, 
@@ -40,7 +40,9 @@ const signup = async (req, res) => {
       [email],
       async (err, existingUser) => {
         if (err) {
-          if (medicalLicense) fs.unlinkSync(medicalLicense.path);
+          if (medicalLicense && medicalLicense.path) {
+            try { fs.unlinkSync(medicalLicense.path); } catch(e) {}
+          }
           console.error('❌ Database error during signup:', err);
           return res.status(500).json({ 
             success: false, 
@@ -49,7 +51,9 @@ const signup = async (req, res) => {
         }
 
         if (existingUser) {
-          if (medicalLicense) fs.unlinkSync(medicalLicense.path);
+          if (medicalLicense && medicalLicense.path) {
+            try { fs.unlinkSync(medicalLicense.path); } catch(e) {}
+          }
           return res.status(400).json({ 
             success: false, 
             message: 'User already exists with this email' 
@@ -59,20 +63,25 @@ const signup = async (req, res) => {
         // Hash password
         const hashedPassword = await bcrypt.hash(password, 12);
 
-        // Handle medical license file
+        // Handle medical license file - use persistent storage
         let medicalLicensePath = null;
-        if (medicalLicense) {
-          const uploadsDir = path.join(__dirname, '../uploads/licenses');
-          if (!fs.existsSync(uploadsDir)) {
-            fs.mkdirSync(uploadsDir, { recursive: true });
+        if (medicalLicense && medicalLicense.path) {
+          const licensesDir = path.join(uploadsBaseDir, 'licenses');
+          if (!fs.existsSync(licensesDir)) {
+            fs.mkdirSync(licensesDir, { recursive: true });
           }
           
           const fileExtension = path.extname(medicalLicense.originalname);
           const fileName = `license-${Date.now()}${fileExtension}`;
-          const filePath = path.join(uploadsDir, fileName);
+          const filePath = path.join(licensesDir, fileName);
           
-          fs.renameSync(medicalLicense.path, filePath);
-          medicalLicensePath = `licenses/${fileName}`;
+          try {
+            fs.renameSync(medicalLicense.path, filePath);
+            medicalLicensePath = `licenses/${fileName}`;
+            console.log(`📄 License saved: ${medicalLicensePath}`);
+          } catch (renameErr) {
+            console.error('Error moving license file:', renameErr);
+          }
         }
 
         // Insert new user with email_verified = true
@@ -83,7 +92,9 @@ const signup = async (req, res) => {
           async function(err) {
             if (err) {
               if (medicalLicensePath) {
-                fs.unlinkSync(path.join(__dirname, '../uploads', medicalLicensePath));
+                try { 
+                  fs.unlinkSync(path.join(uploadsBaseDir, medicalLicensePath)); 
+                } catch(e) {}
               }
               console.error('❌ Error creating user:', err);
               return res.status(500).json({ 
@@ -118,8 +129,8 @@ const signup = async (req, res) => {
 
   } catch (error) {
     console.error('❌ Server error during signup:', error);
-    if (req.file) {
-      fs.unlinkSync(req.file.path);
+    if (req.file && req.file.path) {
+      try { fs.unlinkSync(req.file.path); } catch(e) {}
     }
     res.status(500).json({ 
       success: false, 
