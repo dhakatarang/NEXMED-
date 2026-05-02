@@ -247,7 +247,25 @@ app.get("/api/profile/test", (req, res) => {
 });
 
 // ========== ERROR HANDLING ==========
-
+app.get('/api', (req, res) => {
+  res.json({
+    success: true,
+    message: 'NexMed API is running',
+    version: '2.0',
+    endpoints: {
+      auth: '/api/auth',
+      medicines: '/api/medicines',
+      equipments: '/api/equipments',
+      donaterent: '/api/donaterent',
+      profile: '/api/profile',
+      cart: '/api/cart',
+      admin: '/api/admin',
+      scan: '/api/equipment-scan'
+    },
+    documentation: 'https://nexmed.onrender.com/health',
+    timestamp: new Date().toISOString()
+  });
+});
 // 404 fallback
 app.use((req, res) => {
   console.log(`❌ 404 - Route not found: ${req.method} ${req.path}`);
