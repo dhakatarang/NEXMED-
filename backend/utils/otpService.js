@@ -80,9 +80,14 @@ const sendOTPEmail = async (email, otp, purpose = 'signup') => {
     return { success: true, messageId: 'console-fallback' };
   }
   
+  try {
   const info = await transporterInstance.sendMail(mailOptions);
-  console.log(`📧 Email sent successfully to: ${email}`);
-  console.log(`📧 Message ID: ${info.messageId}`);
+  console.log("✅ Email sent successfully:", info.messageId);
+  return info;
+} catch (error) {
+  console.error("❌ EMAIL SEND ERROR:", error);
+  throw error;
+}
   
   return info;
 };
