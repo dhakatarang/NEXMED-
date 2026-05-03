@@ -1,14 +1,14 @@
+// frontend/src/api.js or frontend/src/services/api.js
 import axios from 'axios';
 
-// Dynamic baseURL based on environment
+// ✅ Dynamic baseURL based on environment
 const getBaseURL = () => {
-  // Production (deployed on Render/Vercel)
-  if (import.meta.env.PROD) {
-    // ✅ FIXED: Point to your actual backend URL
-    return 'https://nexmed-backend.onrender.com/api';
+  // Check if running locally
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    return 'http://localhost:5001/api';
   }
-  // Development (local)
-  return 'http://localhost:5001/api'; // Assuming your backend runs on port 5001 locally
+  // Production
+  return 'https://nexmed-backend.onrender.com/api';
 };
 
 const API = axios.create({
@@ -16,69 +16,29 @@ const API = axios.create({
   timeout: 10000,
 });
 
-// Add a request interceptor to include the auth token
+// Add request interceptor
 API.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
-    } else {
-      // For demo purposes, use user ID as token (as per your backend)
-      const userId = localStorage.getItem('userId');
-      if (userId) {
-        config.headers.Authorization = `Bearer ${userId}`;
-      }
     }
     return config;
   },
-  (error) => {
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
-// Add a response interceptor to handle auth errors
+// Add response interceptor
 API.interceptors.response.use(
-  (response) => {
-    return response;
-  },
+  (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      // Token expired or invalid
       localStorage.removeItem('token');
-      localStorage.removeItem('userId');
+      localStorage.removeItem('user');
       window.location.href = '/login';
     }
     return Promise.reject(error);
   }
 );
-
-// Auth functions
-export const login = (credentials) => API.post('/auth/login', credentials);
-export const signup = (userData) => API.post('/auth/signup', userData);
-export const getCurrentUser = () => API.get('/auth/me');
-
-// Profile functions
-export const getProfile = () => API.get("/profile/me");
-export const updateProfile = (data) => API.put("/profile/update", data);
-
-// Donate Rent functions
-export const donateItem = (data) => API.post("/donaterent/add", data);
-export const getDonations = () => API.get("/donaterent");
-export const getAllItems = () => API.get("/donaterent/all");
-export const getMyItems = () => API.get("/donaterent/my-items");
-export const getItemsByType = (itemType) => API.get(`/donaterent/type/${itemType}`);
-export const getItemById = (id) => API.get(`/donaterent/item/${id}`);
-
-// Medicines functions
-export const getAllMedicines = () => API.get("/medicines/all");
-export const getMedicinesByType = (optionType) => API.get(`/medicines/type/${optionType}`);
-export const buyMedicine = (id, quantity = 1) => API.post(`/medicines/buy/${id}`, { quantity });
-export const getMyMedicines = () => API.get("/medicines/my-medicines");
-
-// Equipment functions
-export const getAllEquipment = () => API.get("/equipments/all");
-export const getEquipmentByType = (optionType) => API.get(`/equipments/type/${optionType}`);
-export const equipmentAction = (id, action, quantity = 1) => API.post(`/equipments/action/${id}`, { action, quantity });
-export const getMyEquipment = () => API.get("/equipments/my-equipment");
 
 export default API;

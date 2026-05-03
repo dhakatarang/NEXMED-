@@ -4,7 +4,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+
+import API from '../../api';
 import './MedicalEquipment.css';
 
 const MedicalEquipment = () => {
@@ -23,7 +24,7 @@ const MedicalEquipment = () => {
   const fetchEquipments = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('https://nexmed.onrender.com/api/equipments/all');
+      const response = await API.get('/equipments/all');;
       
       if (response.data.success) {
         const safeEquipments = response.data.equipments.map(equipment => ({
@@ -40,17 +41,11 @@ const MedicalEquipment = () => {
         }));
         
         // Filter out any default/demo items
-        const realEquipments = safeEquipments.filter(equipment => {
-          if (equipment.name === 'Unnamed Equipment' || 
-              equipment.name.includes('Demo') || 
-              equipment.name.includes('Test') ||
-              equipment.description === 'No description available') {
-            return false;
-          }
-          return true;
-        });
         
-        setEquipments(realEquipments);
+        setEquipments(safeEquipments);
+
+        setEquipments(safeEquipments)
+        setEquipments(safeEquipments);
       } else {
         setMessage('Failed to fetch medical equipment');
       }

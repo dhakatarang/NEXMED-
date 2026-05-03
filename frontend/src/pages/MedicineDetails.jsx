@@ -1,3 +1,4 @@
+
 /*
   Medicine-Details Section -> (When user click on particular medicine to add to cart or see it's details)
 */
@@ -6,6 +7,14 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import './MedicineDetails.css';
+
+// ✅ Get base URL dynamically
+const getBaseUrl = () => {
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    return 'http://localhost:5001';
+  }
+  return 'https://nexmed-backend.onrender.com';
+};
 
 const MedicineDetails = () => {
   const { id } = useParams();
@@ -16,6 +25,8 @@ const MedicineDetails = () => {
   const [messageType, setMessageType] = useState('');
   const [quantity, setQuantity] = useState(1);
 
+  const BASE_URL = getBaseUrl();
+
   useEffect(() => {
     fetchMedicineDetails();
   }, [id]);
@@ -23,7 +34,7 @@ const MedicineDetails = () => {
   const fetchMedicineDetails = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(`https://nexmed.onrender.com/api/medicines/${id}`);
+      const response = await axios.get(`${BASE_URL}/api/medicines/${id}`);
       
       if (response.data.success) {
         const medicineData = {
@@ -68,8 +79,13 @@ const MedicineDetails = () => {
     
     try {
       setMessage('');
-      const response = await axios.post(`https://nexmed.onrender.com/api/medicines/buy/${id}`, {
+      const token = localStorage.getItem("token");
+      const response = await axios.post(`${BASE_URL}/api/medicines/buy/${id}`, {
         quantity: quantity
+      }, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
       });
 
       if (response.data.success) {
@@ -93,7 +109,8 @@ const MedicineDetails = () => {
     
     try {
       setMessage('');
-      const response = await axios.post('https://nexmed.onrender.com/api/cart/add', {
+      const token = localStorage.getItem("token");
+      const response = await axios.post(`${BASE_URL}/api/cart/add`, {
         itemId: medicine.id,
         itemType: 'medicine',
         name: medicine.name,
@@ -104,6 +121,10 @@ const MedicineDetails = () => {
         optionType: medicine.optionType,
         image: medicine.image,
         rentalDays: 0
+      }, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
       });
 
       if (response.data.success) {
@@ -198,7 +219,7 @@ const MedicineDetails = () => {
           <div className="image-card">
             {medicine.image ? (
               <img 
-                src={`https://nexmed.onrender.com/uploads/${medicine.image}`} 
+                src={`${BASE_URL}/uploads/${medicine.image}`} 
                 alt={medicine.name}
                 className="details-image"
                 onError={(e) => {

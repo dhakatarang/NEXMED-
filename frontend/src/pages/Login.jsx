@@ -5,6 +5,14 @@ import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import './SignUp.css';
 
+// ✅ Add dynamic base URL
+const getBaseUrl = () => {
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    return 'http://localhost:5001/api';  // Local backend
+  }
+  return 'https://nexmed-backend.onrender.com/api';  // Production backend
+};
+
 function Login({ setIsLoggedIn }) {
     const [formData, setFormData] = useState({
         email: '',
@@ -59,9 +67,10 @@ function Login({ setIsLoggedIn }) {
 
         try {
             console.log('📍 Sending login request to backend...');
+            console.log(`📍 Using API URL: ${getBaseUrl()}/auth/login`);
             
-            // ✅ FIXED: Use Render backend URL
-            const res = await axios.post('https://nexmed.onrender.com/api/auth/login', {
+            // ✅ FIXED: Use dynamic backend URL
+            const res = await axios.post(`${getBaseUrl()}/auth/login`, {
                 email: formData.email.toLowerCase(),
                 password: formData.password
             });

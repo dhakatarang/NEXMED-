@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const path = require("path");
 const fs = require("fs");
+const multer = require("multer");
 
 // Import routes
 const authRoutes = require("./routes/authRoutes");
@@ -17,14 +18,48 @@ const equipmentScanRoutes = require("./routes/equipmentScanRoutes");
 const { initAllDatabases } = require("./database/initDatabases");
 const { uploadsBaseDir } = require("./database/dbConnections");
 
+// Import services
+const geminiVisionService = require("./services/geminiVisionService");
+const { processOCR, extractMedicineDetails } = require("./services/ocrService");
+
 const app = express();
 
+// ========== MULTER CONFIGURATION FOR TEMP FILES ==========
+const tempStorage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const tempDir = path.join(__dirname, "temp");
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir, { recursive: true });
+    }
+    cb(null, tempDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    cb(null, "temp-" + uniqueSuffix + path.extname(file.originalname));
+  },
+});
+
+const uploadTemp = multer({
+  storage: tempStorage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = /jpeg|jpg|png|gif|webp/;
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = allowedTypes.test(file.mimetype);
+    if (mimetype && extname) {
+      return cb(null, true);
+    } else {
+      cb(new Error("Only image files are allowed"));
+    }
+  },
+});
+
 // ========== STORAGE ==========
-console.log('📁 Using persistent uploads directory:', uploadsBaseDir);
+console.log("📁 Using persistent uploads directory:", uploadsBaseDir);
 
-const dirs = ['profiles', 'scans', 'items', 'licenses'];
+const dirs = ["profiles", "scans", "items", "licenses"];
 
-dirs.forEach(folder => {
+dirs.forEach((folder) => {
   const dirPath = path.join(uploadsBaseDir, folder);
   if (!fs.existsSync(dirPath)) {
     fs.mkdirSync(dirPath, { recursive: true });
@@ -32,36 +67,26 @@ dirs.forEach(folder => {
   }
 });
 
-// ========== ✅ FIXED CORS FOR PRODUCTION ==========
-const allowedOrigins = [
-  'https://nexmed-1.onrender.com',     // Your frontend URL
-  'https://nexmed.onrender.com',        // Alternative frontend URL (if any)
-  'http://localhost:5173',              // Local Vite dev server
-  'http://localhost:3000',              // Alternative local dev port
-  'http://localhost:5000'               // Common dev port
-];
+// Create temp directory
+const tempDir = path.join(__dirname, "temp");
+if (!fs.existsSync(tempDir)) {
+  fs.mkdirSync(tempDir, { recursive: true });
+  console.log(`📁 Created temp directory: ${tempDir}`);
+}
 
-app.use(cors({
-  origin: function(origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl)
-    if (!origin) return callback(null, true);
-    
-    if (allowedOrigins.indexOf(origin) === -1) {
-      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
-      console.warn(`❌ CORS blocked request from: ${origin}`);
-      return callback(new Error(msg), false);
-    }
-    console.log(`✅ CORS allowed request from: ${origin}`);
-    return callback(null, true);
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
-}));
+// ========== ✅ CORS FOR LOCAL DEVELOPMENT ==========
+app.use(
+  cors({
+    origin: true,
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+  })
+);
 
 // ========== BODY PARSING ==========
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 // ========== LOGGING ==========
 app.use((req, res, next) => {
@@ -70,7 +95,7 @@ app.use((req, res, next) => {
 });
 
 // ========== STATIC FILES ==========
-app.use('/uploads', express.static(uploadsBaseDir));
+app.use("/uploads", express.static(uploadsBaseDir));
 
 // ========== INIT DATABASE ==========
 console.log("🔄 Initializing databases...");
@@ -79,71 +104,227 @@ try {
   console.log("✅ Databases initialized successfully");
 } catch (error) {
   console.error("❌ Database initialization failed:", error);
-  // Don't crash the server, but log the error
 }
 
-// ========== HEALTH CHECK ENDPOINTS ==========
+// ========== AUTHENTICATION MIDDLEWARE ==========
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers["authorization"];
+  const token = authHeader && authHeader.split(" ")[1];
 
-// Simple health check (for Render)
+  if (!token) {
+    return res.status(401).json({ success: false, message: "Access token required" });
+  }
+
+  try {
+    const jwt = require("jsonwebtoken");
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || "your-secret-key");
+    req.user = decoded;
+    next();
+  } catch (error) {
+    return res.status(403).json({ success: false, message: "Invalid or expired token" });
+  }
+};
+
+// ========== HEALTH CHECK ENDPOINTS ==========
 app.get("/health", (req, res) => {
   res.status(200).json({
     status: "healthy",
     timestamp: new Date().toISOString(),
-    uptime: process.uptime()
-  });
-});
-
-// Detailed health check
-app.get("/health/detailed", (req, res) => {
-  res.json({
-    status: "healthy",
-    timestamp: new Date().toISOString(),
     uptime: process.uptime(),
-    memory: process.memoryUsage(),
-    version: "2.0",
-    environment: process.env.NODE_ENV || "production",
-    storageLocation: uploadsBaseDir
   });
 });
 
-// Root endpoint
 app.get("/", (req, res) => {
   res.json({
     message: "NexMed Backend is Running ✅",
     version: "2.0",
-    environment: process.env.NODE_ENV || "production",
-    storageLocation: "Persistent (data persists after restart)",
-    features: [
-      "Enhanced Donate/Rent System",
-      "Image Upload",
-      "SQLite3 Database",
-      "User Authentication",
-      "Shopping Cart",
-      "Admin Panel",
-      "AI Vision Scan"
-    ],
-    endpoints: {
-      health: "/health",
-      auth: "/api/auth",
-      medicines: "/api/medicines",
-      equipments: "/api/equipments",
-      scan: "/api/equipment-scan",
-      cart: "/api/cart",
-      profile: "/api/profile",
-      donaterent: "/api/donaterent"
-    },
-    timestamp: new Date().toISOString()
+    environment: "development",
+    timestamp: new Date().toISOString(),
   });
 });
 
-// API Status endpoint
 app.get("/api/status", (req, res) => {
   res.json({
     success: true,
     message: "API is running",
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
   });
 });
+
+// ========== OCR ENDPOINT FOR MEDICINES ==========
+app.post(
+  "/api/medicines/ocr-process",
+  authenticateToken,
+  uploadTemp.single("image"),
+  async (req, res) => {
+    let tempImagePath = null;
+
+    try {
+      console.log("🔍 Starting OCR processing for medicine");
+
+      if (!req.file) {
+        return res.status(400).json({
+          success: false,
+          message: "Please upload an image of the medicine",
+        });
+      }
+
+      tempImagePath = req.file.path;
+      console.log(`📸 Processing image: ${tempImagePath}`);
+
+      // Process OCR
+      const ocrText = await processOCR(tempImagePath);
+      console.log(`📝 OCR Text extracted (${ocrText.length} characters)`);
+
+      const medicineDetails = extractMedicineDetails(ocrText);
+
+      // Clean up temp file
+      if (tempImagePath && fs.existsSync(tempImagePath)) {
+        fs.unlinkSync(tempImagePath);
+        console.log("🧹 Cleaned up temp file");
+      }
+
+      res.json({
+        success: true,
+        message: "OCR processing completed",
+        ocrResults: medicineDetails,
+        extractedText: ocrText.substring(0, 500), // Send first 500 chars for preview
+      });
+    } catch (error) {
+      console.error("💥 OCR Error:", error);
+
+      // Clean up temp file if it exists
+      if (tempImagePath && fs.existsSync(tempImagePath)) {
+        fs.unlinkSync(tempImagePath);
+      }
+
+      res.status(500).json({
+        success: false,
+        message: "OCR processing failed",
+        error: error.message,
+      });
+    }
+  }
+);
+
+// ========== GEMINI AI ENDPOINT FOR EQUIPMENT ==========
+app.post(
+  "/api/equipments/analyze-with-gemini",
+  authenticateToken,
+  uploadTemp.single("image"),
+  async (req, res) => {
+    let tempImagePath = null;
+
+    try {
+      console.log("🤖 Starting Gemini analysis for equipment");
+
+      if (!req.file) {
+        return res.status(400).json({
+          success: false,
+          message: "Please upload an image of the equipment",
+        });
+      }
+
+      tempImagePath = req.file.path;
+      const equipmentName = req.body.name || "medical equipment";
+      const userDescription = req.body.description || "";
+
+      console.log(`📸 Analyzing equipment: ${equipmentName}`);
+      console.log(`📁 Image path: ${tempImagePath}`);
+
+      // Call Gemini Vision Service
+      const analysisResult = await geminiVisionService.analyzeEquipmentCondition(
+        tempImagePath,
+        equipmentName,
+        userDescription
+      );
+
+      // Clean up temp file
+      if (tempImagePath && fs.existsSync(tempImagePath)) {
+        fs.unlinkSync(tempImagePath);
+        console.log("🧹 Cleaned up temp file");
+      }
+
+      if (!analysisResult.success) {
+        return res.status(500).json({
+          success: false,
+          message: "AI analysis failed",
+          error: analysisResult.error,
+        });
+      }
+
+      // Calculate suggested prices based on condition
+      const suggestedPrices = calculateSuggestedPrices(
+        equipmentName,
+        analysisResult.analysis.overallCondition
+      );
+
+      res.json({
+        success: true,
+        message: "Equipment analysis completed successfully",
+        analysis: {
+          overallCondition: analysisResult.analysis.overallCondition,
+          confidence: analysisResult.analysis.confidence,
+          detailedAnalysis: analysisResult.analysis.detailedAnalysis,
+          summary: analysisResult.analysis.summary,
+          recommendations: analysisResult.analysis.recommendations,
+          estimatedLifespan: analysisResult.analysis.estimatedLifespan,
+          safetyScore: analysisResult.analysis.safetyScore,
+          suggestedPrice: suggestedPrices.salePrice,
+          suggestedRentPrice: suggestedPrices.rentPrice,
+        },
+        rawAnalysis: analysisResult.rawResponse,
+        timestamp: analysisResult.timestamp,
+      });
+    } catch (error) {
+      console.error("💥 Gemini Analysis Error:", error);
+
+      // Clean up temp file if it exists
+      if (tempImagePath && fs.existsSync(tempImagePath)) {
+        fs.unlinkSync(tempImagePath);
+      }
+
+      res.status(500).json({
+        success: false,
+        message: "Error analyzing equipment with AI",
+        error: error.message,
+      });
+    }
+  }
+);
+
+// Helper function to calculate suggested prices
+function calculateSuggestedPrices(equipmentName, condition) {
+  const basePrice = getBasePrice(equipmentName);
+  const conditionMultiplier = {
+    excellent: 0.9,
+    good: 0.7,
+    fair: 0.5,
+    poor: 0.3,
+    critical: 0.1,
+  };
+
+  const multiplier = conditionMultiplier[condition] || 0.5;
+  const salePrice = Math.round(basePrice * multiplier);
+  const rentPrice = Math.round(salePrice * 0.04); // Daily rent is 4% of sale price
+
+  return { salePrice, rentPrice };
+}
+
+function getBasePrice(equipmentName) {
+  const name = equipmentName.toLowerCase();
+  if (name.includes("wheelchair")) return 15000;
+  if (name.includes("hospital bed")) return 25000;
+  if (name.includes("oxygen concentrator")) return 35000;
+  if (name.includes("cpap")) return 40000;
+  if (name.includes("monitor")) return 20000;
+  if (name.includes("ventilator")) return 50000;
+  if (name.includes("infusion pump")) return 15000;
+  if (name.includes("nebulizer")) return 3000;
+  if (name.includes("sphygmomanometer")) return 1500;
+  if (name.includes("stethoscope")) return 2000;
+  return 10000; // Default base price
+}
 
 // ========== API ROUTES ==========
 app.use("/api/auth", authRoutes);
@@ -160,68 +341,48 @@ app.use((req, res) => {
   console.log(`❌ 404 - ${req.method} ${req.path}`);
   res.status(404).json({
     success: false,
-    message: `Route not found: ${req.method} ${req.path}`
+    message: `Route not found: ${req.method} ${req.path}`,
   });
 });
 
 // ========== GLOBAL ERROR HANDLER ==========
 app.use((err, req, res, next) => {
   console.error("❌ Server Error:", err);
-  console.error("Error stack:", err.stack);
-  
-  // Don't expose internal errors in production
-  const isProduction = process.env.NODE_ENV === "production";
-  const errorMessage = isProduction 
-    ? "Internal Server Error" 
-    : err.message;
-  
   res.status(500).json({
     success: false,
-    message: errorMessage,
-    ...(isProduction ? {} : { stack: err.stack })
+    message: err.message || "Internal Server Error",
   });
 });
+
+// ========== CLEANUP INTERVAL FOR TEMP FILES ==========
+setInterval(() => {
+  const tempDir = path.join(__dirname, "temp");
+  if (fs.existsSync(tempDir)) {
+    const files = fs.readdirSync(tempDir);
+    const now = Date.now();
+    files.forEach((file) => {
+      const filePath = path.join(tempDir, file);
+      const stats = fs.statSync(filePath);
+      // Delete files older than 1 hour
+      if (now - stats.mtimeMs > 60 * 60 * 1000) {
+        fs.unlinkSync(filePath);
+        console.log(`🧹 Cleaned up old temp file: ${file}`);
+      }
+    });
+  }
+}, 60 * 60 * 1000); // Run every hour
 
 // ========== START SERVER ==========
-// Use Render's PORT or default to 10000 (Render's default)
-const PORT = process.env.PORT || 10000;
-const HOST = '0.0.0.0';
+const PORT = process.env.PORT || 5001;
+const HOST = "0.0.0.0";
 
-const server = app.listen(PORT, HOST, () => {
+app.listen(PORT, HOST, () => {
   console.log(`🚀 Server running on http://${HOST}:${PORT}`);
-  console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`🔗 Health check: http://${HOST}:${PORT}/health`);
+  console.log(`📍 Environment: development`);
+  console.log(`🔗 Health check: http://localhost:${PORT}/health`);
   console.log(`📁 Uploads directory: ${uploadsBaseDir}`);
+  console.log(`🤖 Gemini AI: ${process.env.GEMINI_API_KEY ? "✅ Configured" : "❌ Not configured"}`);
+  console.log(`🔐 JWT Secret: ${process.env.JWT_SECRET ? "✅ Configured" : "⚠️ Using default"}`);
 });
 
-// Graceful shutdown
-const gracefulShutdown = () => {
-  console.log("🛑 Received shutdown signal, closing server gracefully...");
-  server.close(() => {
-    console.log("✅ Server closed successfully");
-    process.exit(0);
-  });
-  
-  // Force close after 10 seconds
-  setTimeout(() => {
-    console.error("❌ Could not close connections in time, forcing shutdown");
-    process.exit(1);
-  }, 10000);
-};
-
-process.on('SIGTERM', gracefulShutdown);
-process.on('SIGINT', gracefulShutdown);
-
-// Handle uncaught exceptions
-process.on('uncaughtException', (error) => {
-  console.error("💥 Uncaught Exception:", error);
-  gracefulShutdown();
-});
-
-// Handle unhandled promise rejections
-process.on('unhandledRejection', (reason, promise) => {
-  console.error("💥 Unhandled Rejection at:", promise, "reason:", reason);
-  gracefulShutdown();
-});
-
-module.exports = app; // For testing purposes
+module.exports = app;

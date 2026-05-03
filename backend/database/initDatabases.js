@@ -179,56 +179,301 @@ function initAllDatabases() {
 
   console.log('📊 All database tables initialized');
   
+  // Wait for tables to be created before adding sample data
   setTimeout(() => {
     addSampleData();
-  }, 1000);
+  }, 2000);
 }
 
 function addSampleData() {
-  console.log('📝 Adding sample data...');
+  console.log('📝 Checking for sample data...');
   
+  // First check if users exist
   mainDB.get("SELECT COUNT(*) as count FROM users", (err, row) => {
     if (err) {
-      console.error('Error checking users:', err);
+      console.error('❌ Error checking users:', err);
       return;
     }
     
     if (row.count === 0) {
+      console.log('📝 No users found, adding sample users...');
       const bcrypt = require('bcryptjs');
       const hashedPassword = bcrypt.hashSync('password123', 10);
       const adminHashedPassword = bcrypt.hashSync('admin123', 10);
       
+      // Add Demo User
       mainDB.run(
-        `INSERT INTO users (name, email, password, user_type, email_verified) VALUES (?, ?, ?, ?, ?)`,
-        ['Demo User', 'demo@nexmed.com', hashedPassword, 'Individual Donor / Receiver', 1],
+        `INSERT INTO users (name, email, password, user_type, role, email_verified) VALUES (?, ?, ?, ?, ?, ?)`,
+        ['Demo User', 'demo@nexmed.com', hashedPassword, 'Individual Donor / Receiver', 'user', 1],
         function(err) {
-          if (err) console.error('Error adding demo user:', err);
-          else addSampleMedicines(this.lastID);
+          if (err) {
+            console.error('❌ Error adding demo user:', err.message);
+          } else {
+            console.log(`✅ Demo user added with ID: ${this.lastID}`);
+            // Add sample medicines and equipment for this user
+            addSampleMedicines(this.lastID);
+            addSampleEquipments(this.lastID);  // ✅ ADD THIS LINE
+          }
         }
       );
       
+      // Add Admin User
       mainDB.run(
         `INSERT INTO users (name, email, password, user_type, role, email_verified) VALUES (?, ?, ?, ?, ?, ?)`,
         ['Admin User', 'admin@nexmed.com', adminHashedPassword, 'Administrator', 'admin', 1],
         function(err) {
-          if (err) console.error('Error adding admin user:', err);
-          else console.log('✅ Admin user added');
+          if (err) {
+            console.error('❌ Error adding admin user:', err.message);
+          } else {
+            console.log(`✅ Admin user added with ID: ${this.lastID}`);
+          }
         }
       );
+    } else {
+      console.log(`✅ Users already exist (${row.count} users found), checking for sample data...`);
+      
+      // Check if medicines exist, if not add them
+      mainDB.get("SELECT COUNT(*) as count FROM medicines", (err, medRow) => {
+        if (err) {
+          console.error('Error checking medicines:', err);
+          return;
+        }
+        
+        if (medRow.count === 0) {
+          console.log('📝 No medicines found, adding sample medicines...');
+          mainDB.get("SELECT id FROM users WHERE email = 'demo@nexmed.com'", (err, userRow) => {
+            if (err) {
+              console.error('Error finding demo user:', err);
+              return;
+            }
+            if (userRow) {
+              addSampleMedicines(userRow.id);
+            } else {
+              console.log('⚠️ Demo user not found, skipping medicine samples');
+            }
+          });
+        } else {
+          console.log(`✅ Medicines already exist (${medRow.count} medicines found)`);
+        }
+      });
+      
+      // ✅ ADD THIS: Check if equipments exist, if not add them
+      mainDB.get("SELECT COUNT(*) as count FROM equipments", (err, equipRow) => {
+        if (err) {
+          console.error('Error checking equipments:', err);
+          return;
+        }
+        
+        if (equipRow.count === 0) {
+          console.log('📝 No equipments found, adding sample equipments...');
+          mainDB.get("SELECT id FROM users WHERE email = 'demo@nexmed.com'", (err, userRow) => {
+            if (err) {
+              console.error('Error finding demo user:', err);
+              return;
+            }
+            if (userRow) {
+              addSampleEquipments(userRow.id);
+            } else {
+              console.log('⚠️ Demo user not found, trying user ID 1');
+              addSampleEquipments(1);
+            }
+          });
+        } else {
+          console.log(`✅ Equipments already exist (${equipRow.count} equipments found)`);
+        }
+      });
     }
   });
 }
 
 function addSampleMedicines(userId) {
+  console.log(`📝 Adding sample medicines for user ID: ${userId}...`);
+  
   const medicines = [
-    { name: "Paracetamol 500mg", description: "Pain reliever and fever reducer", quantity: 150, price: 5.99, option_type: "sell", image_path: "https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=400" },
-    { name: "Vitamin C 1000mg", description: "Immune support supplement", quantity: 200, price: 0, option_type: "donate", image_path: "https://images.unsplash.com/photo-1616671276441-2f2c3f21c9b2?w=400" }
+    {
+      name: "Paracetamol 500mg",
+      description: "Pain reliever and fever reducer. Effective for headaches, muscle aches, and fever.",
+      quantity: 150,
+      price: 5.99,
+      option_type: "sell",
+      item_type: "medicine",
+      image_path: "paracetamol.jpg",
+      status: "available"
+    },
+    {
+      name: "Vitamin C 1000mg",
+      description: "Immune support supplement. Boosts immunity and helps fight common cold.",
+      quantity: 200,
+      price: 0,
+      option_type: "donate",
+      item_type: "medicine",
+      image_path: "vitaminc.jpg",
+      status: "available"
+    },
+    {
+      name: "Amoxicillin 250mg",
+      description: "Antibiotic for bacterial infections. Prescription required.",
+      quantity: 80,
+      price: 12.99,
+      option_type: "sell",
+      item_type: "medicine",
+      image_path: "amoxicillin.jpg",
+      status: "available"
+    },
+    {
+      name: "Insulin Pen",
+      description: "Diabetes management medication. Keep refrigerated.",
+      quantity: 30,
+      price: 0,
+      option_type: "donate",
+      item_type: "medicine",
+      image_path: "insulin.jpg",
+      status: "available"
+    }
   ];
   
-  medicines.forEach(med => {
+  let addedCount = 0;
+  
+  medicines.forEach((med) => {
     mainDB.run(
-      `INSERT INTO medicines (name, description, quantity, price, option_type, added_by, item_type, image_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [med.name, med.description, med.quantity, med.price, med.option_type, userId, 'medicine', med.image_path]
+      `INSERT INTO medicines (name, description, quantity, price, option_type, added_by, item_type, image_path, status) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [med.name, med.description, med.quantity, med.price, med.option_type, userId, med.item_type, med.image_path, med.status],
+      function(err) {
+        if (err) {
+          console.error(`❌ Error adding medicine "${med.name}":`, err.message);
+        } else {
+          addedCount++;
+          console.log(`✅ Added medicine: ${med.name} (${med.option_type})`);
+        }
+        
+        if (addedCount === medicines.length) {
+          console.log(`✅ All ${addedCount} sample medicines added successfully!`);
+        }
+      }
+    );
+  });
+}
+
+// ✅ NEW FUNCTION: Add sample equipments
+function addSampleEquipments(userId) {
+  console.log(`📝 Adding sample equipments for user ID: ${userId}...`);
+  
+  const equipments = [
+    {
+      name: "Standard Wheelchair",
+      description: "Lightweight foldable wheelchair with armrests and footrests. Perfect for mobility assistance.",
+      quantity: 10,
+      price: 15000,
+      rent_price: 500,
+      option_type: "rent",
+      item_type: "medicalequipment",
+      condition: "good",
+      min_rental_days: 7,
+      image_path: "wheelchair.jpg",
+      status: "available"
+    },
+    {
+      name: "Digital Blood Pressure Monitor",
+      description: "Automatic upper arm blood pressure monitor with large display. Easy to use at home.",
+      quantity: 25,
+      price: 2500,
+      rent_price: 0,
+      option_type: "sell",
+      item_type: "medicalequipment",
+      condition: "excellent",
+      min_rental_days: 0,
+      image_path: "bp_monitor.jpg",
+      status: "available"
+    },
+    {
+      name: "Hospital Bed",
+      description: "Adjustable hospital bed with side rails and remote control. Electric operation for patient comfort.",
+      quantity: 5,
+      price: 0,
+      rent_price: 3000,
+      option_type: "donate",
+      item_type: "medicalequipment",
+      condition: "good",
+      min_rental_days: 30,
+      image_path: "hospital_bed.jpg",
+      status: "available"
+    },
+    {
+      name: "Oxygen Concentrator",
+      description: "5L oxygen concentrator with nebulizer function. Portable and quiet operation.",
+      quantity: 8,
+      price: 35000,
+      rent_price: 2000,
+      option_type: "rent",
+      item_type: "medicalequipment",
+      condition: "excellent",
+      min_rental_days: 14,
+      image_path: "oxygen_concentrator.jpg",
+      status: "available"
+    },
+    {
+      name: "Walking Cane",
+      description: "Adjustable aluminum walking cane with ergonomic handle. Lightweight and sturdy.",
+      quantity: 50,
+      price: 800,
+      rent_price: 0,
+      option_type: "sell",
+      item_type: "medicalequipment",
+      condition: "excellent",
+      min_rental_days: 0,
+      image_path: "walking_cane.jpg",
+      status: "available"
+    },
+    {
+      name: "Nebulizer Machine",
+      description: "Portable mesh nebulizer for respiratory treatments. Quiet and efficient.",
+      quantity: 20,
+      price: 3500,
+      rent_price: 300,
+      option_type: "sell",
+      item_type: "medicalequipment",
+      condition: "good",
+      min_rental_days: 0,
+      image_path: "nebulizer.jpg",
+      status: "available"
+    },
+    {
+      name: "CPAP Machine",
+      description: "For sleep apnea treatment. Includes mask and humidifier.",
+      quantity: 12,
+      price: 45000,
+      rent_price: 2500,
+      option_type: "rent",
+      item_type: "medicalequipment",
+      condition: "excellent",
+      min_rental_days: 30,
+      image_path: "cpap.jpg",
+      status: "available"
+    }
+  ];
+  
+  let addedCount = 0;
+  
+  equipments.forEach((equip) => {
+    mainDB.run(
+      `INSERT INTO equipments (name, description, quantity, price, rent_price, option_type, added_by, item_type, condition, min_rental_days, image_path, status) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [equip.name, equip.description, equip.quantity, equip.price, equip.rent_price, 
+       equip.option_type, userId, equip.item_type, equip.condition, equip.min_rental_days, 
+       equip.image_path, equip.status],
+      function(err) {
+        if (err) {
+          console.error(`❌ Error adding equipment "${equip.name}":`, err.message);
+        } else {
+          addedCount++;
+          console.log(`✅ Added equipment: ${equip.name} (${equip.option_type})`);
+        }
+        
+        if (addedCount === equipments.length) {
+          console.log(`✅ All ${addedCount} sample equipments added successfully!`);
+        }
+      }
     );
   });
 }

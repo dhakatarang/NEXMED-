@@ -1,180 +1,619 @@
-// backend/controllers/donaterentController.js
-const create = async (req, res) => {
-  try {
-    console.log('📦 Received donation request from user:', req.user);
+/*
+  Donate-Rent Page -> (On navbar)
+*/
 
-    const {
-      itemType,
+import React, { useState, useEffect } from 'react';
+import API from '../../api';
+import './DonateRent.css';
+
+const DonateRent = () => {
+  const [formData, setFormData] = useState({
+    itemType: 'medicine',
+    optionType: 'donate',
+    name: '',
+    description: '',
+    quantity: '',
+    price: '',
+    rentPrice: '',
+    duration: '',
+    termsAccepted: false,
+    expiryDate: '',
+    batchNumber: '',
+    condition: 'good'
+  });
+  const [image, setImage] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState('');
+  const [highlightRent, setHighlightRent] = useState(false);
+  const [processing, setProcessing] = useState(false);
+  const [processingStep, setProcessingStep] = useState('');
+
+  // Calculate estimated values for rent comparison
+  const calculateRentComparison = () => {
+    if (!formData.price || !formData.rentPrice) return null;
+    
+    const salePrice = parseFloat(formData.price);
+    const dailyRent = parseFloat(formData.rentPrice);
+    
+    const weeklyCost = dailyRent * 7;
+    const monthlyCost = dailyRent * 30;
+    const breakEvenDays = salePrice / dailyRent;
+    
+    return {
+      weeklyCost: weeklyCost.toFixed(2),
+      monthlyCost: monthlyCost.toFixed(2),
+      breakEvenDays: Math.ceil(breakEvenDays)
+    };
+  };
+
+  const rentComparison = calculateRentComparison();
+
+  useEffect(() => {
+    if (formData.optionType === 'rent') {
+      setHighlightRent(true);
+      const timer = setTimeout(() => setHighlightRent(false), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [formData.optionType]);
+
+  // Reset option type to donate if medicine is selected and current option is rent
+  useEffect(() => {
+    if (formData.itemType === 'medicine' && formData.optionType === 'rent') {
+      setFormData(prev => ({
+        ...prev,
+        optionType: 'donate',
+        rentPrice: '',
+        duration: ''
+      }));
+      setMessage('Rent option is not available for medicine. Switched to Donate.');
+    }
+  }, [formData.itemType]);
+
+  const handleInputChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
+    }));
+  };
+
+  const handleOptionTypeChange = (optionType) => {
+    // Prevent selecting rent for medicine
+    if (formData.itemType === 'medicine' && optionType === 'rent') {
+      setMessage('Rent option is only available for Medical Equipment');
+      return;
+    }
+
+    setFormData(prev => ({
+      ...prev,
       optionType,
-      name,
-      description,
-      quantity,
-      price,
-      rentPrice,
-      duration,
-      termsAccepted
-    } = req.body;
+      ...(optionType === 'donate' && { price: '', rentPrice: '', duration: '' }),
+      ...(prev.optionType === 'rent' && optionType !== 'rent' && { rentPrice: '', duration: '' })
+    }));
+  };
 
-    // Use authenticated user's ID
-    const effectiveUserId = req.user.id;
-
-    // Handle file upload
-    let imagePath = '';
-    if (req.file) {
-      imagePath = `/uploads/${req.file.filename}`;
-      console.log('📁 File uploaded:', imagePath);
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file && file.size > 5 * 1024 * 1024) {
+      setMessage('File size must be less than 5MB');
+      return;
     }
+    setImage(file);
+    setMessage('');
+  };
 
-    // Validate required fields
-    if (!name || !description || !quantity || !termsAccepted) {
-      console.log('❌ Missing required fields');
-      return res.status(400).json({ 
-        success: false,
-        error: 'Name, description, quantity, and terms acceptance are required',
-        received: { name, description, quantity, termsAccepted }
-      });
-    }
+  // Process Medicine with OCR
+  const processMedicineWithOCR = async () => {
+    setProcessing(true);
+    setProcessingStep('Analyzing medicine image with OCR...');
 
-    // Validate option types based on item type
-    if (itemType === 'medicine' && !['donate', 'sell'].includes(optionType)) {
-      return res.status(400).json({ 
-        success: false,
-        error: "For medicines, only 'donate' or 'sell' options are allowed" 
-      });
-    }
-
-    if (itemType === 'medicalequipment' && !['donate', 'sell', 'rent'].includes(optionType)) {
-      return res.status(400).json({ 
-        success: false,
-        error: "For medical equipment, only 'donate', 'sell', or 'rent' options are allowed" 
-      });
-    }
-
-    let result;
-
-    if (itemType === 'medicine') {
-      const medicineData = {
-        name,
-        description,
-        quantity: parseInt(quantity),
-        price: optionType === 'sell' ? parseFloat(price || 0) : 0,
-        is_donated: optionType === 'donate',
-        image_path: imagePath,
-        option_type: optionType,
-        added_by: effectiveUserId,
-        expiry_date: req.body.expiryDate || null,
-        created_at: new Date().toISOString()
-      };
-
-      // Insert into medicines table
-      const medicineSql = `
-        INSERT INTO medicines 
-        (name, description, quantity, price, is_donated, image_path, option_type, added_by, expiry_date, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `;
+    const medicineData = new FormData();
+    medicineData.append('image', image);
+    medicineData.append('name', formData.name);
+    medicineData.append('description', formData.description);
+    medicineData.append('quantity', formData.quantity);
+    medicineData.append('optionType', formData.optionType);
+    medicineData.append('price', formData.price);
+    
+    try {
       
-      result = await new Promise((resolve, reject) => {
-        medicinesDB.run(medicineSql, [
-          medicineData.name,
-          medicineData.description,
-          medicineData.quantity,
-          medicineData.price,
-          medicineData.is_donated ? 1 : 0,
-          medicineData.image_path,
-          medicineData.option_type,
-          medicineData.added_by,
-          medicineData.expiry_date,
-          medicineData.created_at
-        ], function(err) {
-          if (err) reject(err);
-          else resolve({ id: this.lastID, type: 'medicine' });
-        });
-      });
-
-    } else if (itemType === 'medicalequipment') {
-      const equipmentData = {
-        name,
-        description,
-        quantity: parseInt(quantity),
-        price: optionType === 'sell' ? parseFloat(price || 0) : 0,
-        rent_price: optionType === 'rent' ? parseFloat(rentPrice || 0) : 0,
-        min_rental_days: optionType === 'rent' ? parseInt(duration || 1) : 0,
-        is_for_rent: optionType === 'rent',
-        is_donated: optionType === 'donate',
-        image_path: imagePath,
-        option_type: optionType,
-        condition: req.body.condition || 'good',
-        added_by: effectiveUserId,
-        created_at: new Date().toISOString()
-      };
-
-      // Insert into equipments table
-      const equipmentSql = `
-        INSERT INTO equipments 
-        (name, description, quantity, price, rent_price, min_rental_days, is_for_rent, is_donated, image_path, option_type, condition, added_by, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `;
+      setProcessingStep('Extracting medicine information from image...');
       
-      result = await new Promise((resolve, reject) => {
-        equipmentsDB.run(equipmentSql, [
-          equipmentData.name,
-          equipmentData.description,
-          equipmentData.quantity,
-          equipmentData.price,
-          equipmentData.rent_price,
-          equipmentData.min_rental_days,
-          equipmentData.is_for_rent ? 1 : 0,
-          equipmentData.is_donated ? 1 : 0,
-          equipmentData.image_path,
-          equipmentData.option_type,
-          equipmentData.condition,
-          equipmentData.added_by,
-          equipmentData.created_at
-        ], function(err) {
-          if (err) reject(err);
-          else resolve({ id: this.lastID, type: 'equipment' });
-        });
-      });
+      // Call OCR endpoint
+      const ocrResponse = await API.post('/medicines/ocr-process', medicineData, {
+  headers: { 'Content-Type': 'multipart/form-data' }
+});
+
+
+      if (ocrResponse.data.success) {
+        // Store OCR data in sessionStorage
+        const ocrData = {
+          medicineData: {
+            name: formData.name,
+            description: formData.description,
+            quantity: formData.quantity,
+            price: formData.price,
+            optionType: formData.optionType,
+            expiryDate: formData.expiryDate,
+            batchNumber: formData.batchNumber
+          },
+          ocrResults: ocrResponse.data.ocrResults,
+          imagePreview: image ? URL.createObjectURL(image) : null
+        };
+        
+        sessionStorage.setItem('pendingMedicineOCR', JSON.stringify(ocrData));
+        
+        setMessage('✓ Medicine detected! Redirecting to verification...');
+        
+        // Redirect to Medicine verification page
+        setTimeout(() => {
+          window.location.href = '/medicine/verify';
+        }, 1500);
+      } else {
+        setMessage(ocrResponse.data.message || 'OCR processing failed. Please fill details manually.');
+        setProcessing(false);
+      }
+    } catch (error) {
+      console.error('OCR Error:', error);
+      setMessage(error.response?.data?.message || 'Error processing medicine. Please fill details manually.');
+      setProcessing(false);
+    }
+  };
+
+  // Process Equipment with Gemini AI
+  const processEquipmentWithGemini = async () => {
+    setProcessing(true);
+    setProcessingStep('Analyzing equipment condition with AI...');
+
+    const equipmentData = new FormData();
+    equipmentData.append('image', image);
+    equipmentData.append('name', formData.name);
+    equipmentData.append('description', formData.description);
+    equipmentData.append('quantity', formData.quantity);
+    equipmentData.append('optionType', formData.optionType);
+    equipmentData.append('price', formData.price);
+    equipmentData.append('rentPrice', formData.rentPrice);
+    equipmentData.append('duration', formData.duration);
+    
+    try {
+      
+
+      setProcessingStep('AI analyzing equipment condition...');
+      
+      // Call Gemini analysis endpoint
+      const geminiResponse = await API.post('/equipments/analyze-with-gemini', equipmentData, {
+  headers: { 'Content-Type': 'multipart/form-data' }
+});
+
+      if (geminiResponse.data.success) {
+        // Store Gemini analysis in sessionStorage
+        const analysisData = {
+          equipmentData: {
+            name: formData.name,
+            description: formData.description,
+            quantity: formData.quantity,
+            price: formData.price,
+            rentPrice: formData.rentPrice,
+            optionType: formData.optionType,
+            duration: formData.duration
+          },
+          geminiAnalysis: geminiResponse.data.analysis,
+          suggestedCondition: geminiResponse.data.analysis?.overallCondition || 'good',
+          imagePreview: image ? URL.createObjectURL(image) : null
+        };
+        
+        sessionStorage.setItem('pendingEquipmentAnalysis', JSON.stringify(analysisData));
+        
+        setMessage('✓ Equipment analyzed! Redirecting to verification...');
+        
+        // Redirect to Equipment verification page
+        setTimeout(() => {
+          window.location.href = '/medical-equipment/verify';
+        }, 1500);
+      } else {
+        setMessage(geminiResponse.data.message || 'AI analysis failed. Please fill details manually.');
+        setProcessing(false);
+      }
+    } catch (error) {
+      console.error('Gemini Analysis Error:', error);
+      setMessage(error.response?.data?.message || 'Error analyzing equipment. Please fill details manually.');
+      setProcessing(false);
+    }
+  };
+
+  // Add Equipment directly (fallback if no image)
+  const addEquipmentDirectly = async () => {
+    const submitData = new FormData();
+    
+    Object.keys(formData).forEach(key => {
+      if (key !== 'expiryDate' && key !== 'batchNumber') {
+        if (key === 'termsAccepted') {
+          submitData.append(key, formData[key].toString());
+        } else {
+          submitData.append(key, formData[key]);
+        }
+      }
+    });
+    
+    if (image) {
+      submitData.append('image', image);
     }
 
-    // Also insert into donaterent table for unified view
-    const donaterentSql = `
-      INSERT INTO donaterent 
-      (user_id, item_type, item_id, option_type, name, description, quantity, price, rent_price, duration, image_path, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `;
+    try {
+      
 
-    await new Promise((resolve, reject) => {
-      donateRentDB.run(donaterentSql, [
-        effectiveUserId,
-        itemType,
-        result.id,
-        optionType,
-        name,
-        description,
-        parseInt(quantity),
-        price ? parseFloat(price) : null,
-        rentPrice ? parseFloat(rentPrice) : null,
-        duration || null,
-        imagePath,
-        new Date().toISOString()
-      ], function(err) {
-        if (err) reject(err);
-        else resolve();
-      });
-    });
+      const response = await API.post('/donaterent/add', submitData, {
+  headers: { 'Content-Type': 'multipart/form-data' }
+});
 
-    res.json({
-      success: true,
-      message: 'Item added successfully!',
-      data: result
-    });
+      if (response.data.success) {
+        setMessage('Equipment added successfully!');
+        // Reset form
+        setFormData({
+          itemType: 'medicine',
+          optionType: 'donate',
+          name: '',
+          description: '',
+          quantity: '',
+          price: '',
+          rentPrice: '',
+          duration: '',
+          termsAccepted: false,
+          expiryDate: '',
+          batchNumber: '',
+          condition: 'good'
+        });
+        setImage(null);
+        const fileInput = document.getElementById('image-upload');
+        if (fileInput) fileInput.value = '';
+        
+        // Redirect to equipment page after 2 seconds
+        setTimeout(() => {
+          window.location.href = '/medical-equipment';
+        }, 2000);
+      }
+    } catch (error) {
+      console.error('Error adding equipment:', error);
+      setMessage(error.response?.data?.message || error.response?.data?.error || 'Error adding equipment');
+    }
+  };
 
-  } catch (error) {
-    console.error('💥 Unexpected error in create:', error);
-    res.status(500).json({ 
-      success: false,
-      error: 'Internal server error: ' + error.message
-    });
-  }
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!formData.termsAccepted) {
+      setMessage('Please accept the terms and conditions');
+      return;
+    }
+
+    // Check authentication first
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setMessage('Please login to add items');
+      setTimeout(() => {
+        window.location.href = '/login';
+      }, 2000);
+      return;
+    }
+
+    // Enhanced validation
+    if (formData.optionType === 'sell' && !formData.price) {
+      setMessage('Price is required for selling items');
+      return;
+    }
+
+    if (formData.optionType === 'rent') {
+      if (!formData.rentPrice) {
+        setMessage('Rent price is required for rental items');
+        return;
+      }
+      if (parseFloat(formData.rentPrice) <= 0) {
+        setMessage('Rent price must be greater than 0');
+        return;
+      }
+    }
+
+    if (!formData.name || !formData.description || !formData.quantity) {
+      setMessage('Please fill all required fields');
+      return;
+    }
+
+    setLoading(true);
+    setMessage('');
+
+    // Route based on item type
+    if (formData.itemType === 'medicine') {
+      // For medicine, image is required for OCR
+      if (!image) {
+        setMessage('Please upload an image of the medicine for verification');
+        setLoading(false);
+        return;
+      }
+      await processMedicineWithOCR();
+    } else if (formData.itemType === 'medicalequipment') {
+      // For equipment, use Gemini AI if image provided, otherwise add directly
+      if (image) {
+        await processEquipmentWithGemini();
+      } else {
+        await addEquipmentDirectly();
+      }
+    }
+    
+    setLoading(false);
+  };
+
+  // Check if rent option should be available
+  const isRentAvailable = formData.itemType === 'medicalequipment';
+
+  return (
+    <div className="donate-rent-page">
+      {/* Inspirational Message */}
+      <div className="inspiration-section">
+        <h2>Make a Difference</h2>
+        <p>
+          Your unused medical supplies can save lives. Join our community of givers 
+          and help make healthcare accessible to everyone.
+        </p>
+      </div>
+
+      {/* Form Container */}
+      <div className="form-container">
+        <div className="form-header">
+          <h3>Add Your Item</h3>
+        </div>
+        
+        {message && (
+          <div className={`message ${message.includes('✓') || message.includes('successfully') ? 'success' : 'error'}`}>
+            {message}
+          </div>
+        )}
+
+        {processing && (
+          <div className="processing-overlay">
+            <div className="processing-card">
+              <div className="spinner"></div>
+              <h4>Processing</h4>
+              <p>{processingStep}</p>
+              <small>Please don't close this window</small>
+            </div>
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit}>
+          {/* Item Type Selection */}
+          <div className="form-row">
+            <div className="form-group">
+              <label>Item Type *</label>
+              <select 
+                name="itemType" 
+                value={formData.itemType} 
+                onChange={handleInputChange}
+                className="form-select"
+                disabled={loading || processing}
+              >
+                <option value="medicine">Medicine (OCR Analysis)</option>
+                <option value="medicalequipment">Medical Equipment (AI Analysis)</option>
+              </select>
+              <small className="help-text">
+                {formData.itemType === 'medicine' ? 
+                  'Medicine images will be analyzed using OCR technology' : 
+                  'Equipment images will be analyzed using Gemini AI for condition assessment'}
+              </small>
+            </div>
+
+            <div className="form-group">
+              <label>Action *</label>
+              <select 
+                name="optionType" 
+                value={formData.optionType} 
+                onChange={(e) => handleOptionTypeChange(e.target.value)}
+                className="form-select"
+                disabled={loading || processing}
+              >
+                <option value="donate">Donate</option>
+                <option value="sell">Sell</option>
+                <option value="rent" disabled={!isRentAvailable}>Rent {!isRentAvailable && '(Equipment only)'}</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Basic Information */}
+          <div className="form-group">
+            <label>Item Name *</label>
+            <input
+              type="text"
+              name="name"
+              value={formData.name}
+              onChange={handleInputChange}
+              placeholder="Enter item name"
+              required
+              disabled={loading || processing}
+            />
+          </div>
+
+          <div className="form-group">
+            <label>Description *</label>
+            <textarea
+              name="description"
+              value={formData.description}
+              onChange={handleInputChange}
+              placeholder="Describe the item condition, expiry date, specifications, etc."
+              rows="3"
+              required
+              disabled={loading || processing}
+            />
+          </div>
+
+          <div className="form-row">
+            <div className="form-group">
+              <label>Quantity *</label>
+              <input
+                type="number"
+                name="quantity"
+                value={formData.quantity}
+                onChange={handleInputChange}
+                placeholder="Enter quantity"
+                min="1"
+                required
+                disabled={loading || processing}
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Image {formData.itemType === 'medicine' ? '(Required for OCR)' : '(Recommended for AI analysis)'}</label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleImageChange}
+                className="file-input"
+                disabled={loading || processing}
+              />
+              {formData.itemType === 'medicine' && !image && (
+                <small className="error-text">Medicine image is required for verification</small>
+              )}
+            </div>
+          </div>
+
+          {/* Medicine-specific fields */}
+          {formData.itemType === 'medicine' && (
+            <div className="medicine-fields">
+              <h4>Medicine Details</h4>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Expiry Date</label>
+                  <input
+                    type="date"
+                    name="expiryDate"
+                    value={formData.expiryDate}
+                    onChange={handleInputChange}
+                    disabled={loading || processing}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Batch Number</label>
+                  <input
+                    type="text"
+                    name="batchNumber"
+                    value={formData.batchNumber}
+                    onChange={handleInputChange}
+                    placeholder="Optional"
+                    disabled={loading || processing}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Pricing Section */}
+          {(formData.optionType === 'sell' || formData.optionType === 'rent') && (
+            <div className="pricing-section">
+              <h4>Pricing Information</h4>
+              
+              {formData.optionType === 'sell' && (
+                <div className="form-group">
+                  <label>Price (₹) *</label>
+                  <input
+                    type="number"
+                    name="price"
+                    value={formData.price}
+                    onChange={handleInputChange}
+                    placeholder="Enter sale price"
+                    min="0"
+                    step="0.01"
+                    required
+                    disabled={loading || processing}
+                  />
+                </div>
+              )}
+
+              {formData.optionType === 'rent' && isRentAvailable && (
+                <>
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>Sale Price (₹) - Optional</label>
+                      <input
+                        type="number"
+                        name="price"
+                        value={formData.price}
+                        onChange={handleInputChange}
+                        placeholder="Enter sale price if applicable"
+                        min="0"
+                        step="0.01"
+                        disabled={loading || processing}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Daily Rent (₹) *</label>
+                      <input
+                        type="number"
+                        name="rentPrice"
+                        value={formData.rentPrice}
+                        onChange={handleInputChange}
+                        placeholder="Enter rent per day"
+                        min="0"
+                        step="0.01"
+                        required
+                        disabled={loading || processing}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Rent Comparison */}
+                  {rentComparison && (
+                    <div className="comparison-box">
+                      <div className="comparison-item">
+                        <span className="comparison-label">Weekly</span>
+                        <span className="comparison-value">₹{rentComparison.weeklyCost}</span>
+                      </div>
+                      <div className="comparison-item">
+                        <span className="comparison-label">Monthly</span>
+                        <span className="comparison-value">₹{rentComparison.monthlyCost}</span>
+                      </div>
+                      <div className="comparison-item highlight">
+                        <span className="comparison-label">Break-even</span>
+                        <span className="comparison-value">{rentComparison.breakEvenDays} days</span>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Terms and Conditions */}
+          <div className="terms-group">
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                name="termsAccepted"
+                checked={formData.termsAccepted}
+                onChange={handleInputChange}
+                required
+                disabled={loading || processing}
+              />
+              <span>I accept the <button type="button" className="terms-link">terms and conditions</button></span>
+            </label>
+          </div>
+
+          {/* Submit Button */}
+          <button 
+            type="submit" 
+            disabled={loading || processing} 
+            className="submit-button"
+          >
+            {loading || processing ? (
+              <>
+                <span className="button-spinner"></span>
+                {processing ? 'Processing...' : 'Adding Item...'}
+              </>
+            ) : (
+              `Add Item for ${formData.optionType === 'donate' ? 'Donation' : formData.optionType === 'sell' ? 'Sale' : 'Rental'}`
+            )}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
 };
+
+export default DonateRent;

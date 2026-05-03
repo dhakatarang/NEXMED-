@@ -1,35 +1,51 @@
-import React, { useState, useEffect, useRef } from 'react';
+// frontend/src/components/OTPVerification.jsx
+
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import './OTPVerification.css';
 
-function OTPVerification({ email, onVerified, onBack }) {
+// ✅ Add dynamic base URL (same as SignUp.jsx)
+const getBaseUrl = () => {
+  const hostname = window.location.hostname;
+  const isLocal = hostname === 'localhost' || hostname === '127.0.0.1';
+  
+  if (isLocal) {
+    return 'http://localhost:5001/api';
+  }
+  return 'https://nexmed-backend.onrender.com/api';
+};
+
+const OTPVerification = ({ email, onVerified, onBack }) => {
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [timer, setTimer] = useState(60);
+  const [timeLeft, setTimeLeft] = useState(300); // 5 minutes
   const [canResend, setCanResend] = useState(false);
-  const inputRefs = useRef([]);
+
+  const BASE_URL = getBaseUrl();
 
   useEffect(() => {
-    if (inputRefs.current[0]) {
-      inputRefs.current[0].focus();
-    }
+    const timer = setInterval(() => {
+      setTimeLeft(prev => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          setCanResend(true);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
   }, []);
 
-  useEffect(() => {
-    let interval;
-    if (timer > 0 && !canResend) {
-      interval = setInterval(() => {
-        setTimer((prev) => prev - 1);
-      }, 1000);
-    } else if (timer === 0) {
-      setCanResend(true);
-    }
-    return () => clearInterval(interval);
-  }, [timer, canResend]);
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
 
-  const handleChange = (index, value) => {
-    if (value && !/^\d*$/.test(value)) return;
+  const handleOtpChange = (index, value) => {
     if (value.length > 1) return;
     
     const newOtp = [...otp];
@@ -37,31 +53,18 @@ function OTPVerification({ email, onVerified, onBack }) {
     setOtp(newOtp);
     setError('');
 
+    // Auto-focus next input
     if (value && index < 5) {
-      inputRefs.current[index + 1]?.focus();
-    }
-  };
-
-  const handleKeyDown = (index, e) => {
-    if (e.key === 'Backspace' && !otp[index] && index > 0) {
-      inputRefs.current[index - 1]?.focus();
-    }
-    
-    if (e.key === 'v' && (e.ctrlKey || e.metaKey)) {
-      e.preventDefault();
-      const pastedText = e.clipboardData?.getData('text');
-      if (pastedText && /^\d{6}$/.test(pastedText)) {
-        const digits = pastedText.split('');
-        setOtp(digits);
-        inputRefs.current[5]?.focus();
-      }
+      const nextInput = document.getElementById(`otp-${index + 1}`);
+      if (nextInput) nextInput.focus();
     }
   };
 
   const handleVerify = async () => {
     const otpValue = otp.join('');
+    
     if (otpValue.length !== 6) {
-      setError('Please enter complete 6-digit OTP');
+      setError('Please enter the 6-digit verification code');
       return;
     }
 
@@ -69,112 +72,141 @@ function OTPVerification({ email, onVerified, onBack }) {
     setError('');
 
     try {
-      // ✅ FIXED: Use Render backend URL
-      const response = await axios.post('https://nexmed.onrender.com/api/auth/verify-otp', {
-        email,
+      console.log(`📍 Verifying OTP at: ${BASE_URL}/auth/verify-otp`);
+      
+      const response = await axios.post(`${BASE_URL}/auth/verify-otp`, {
+        email: email,
         otp: otpValue,
         purpose: 'signup'
       });
 
       if (response.data.success) {
         onVerified(true);
+      } else {
+        setError(response.data.message || 'Invalid verification code');
+        onVerified(false);
       }
-    } catch (err) {
-      setError(err.response?.data?.message || 'Invalid OTP. Please try again.');
-      setOtp(['', '', '', '', '', '']);
-      inputRefs.current[0]?.focus();
+    } catch (error) {
+      console.error('❌ OTP verification error:', error);
+      const errorMsg = error.response?.data?.message || 'Failed to verify OTP. Please try again.';
+      setError(errorMsg);
+      onVerified(false);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleResend = async () => {
+    if (!canResend) return;
+
     setIsLoading(true);
     setError('');
 
     try {
-      // ✅ FIXED: Use Render backend URL
-      await axios.post('https://nexmed.onrender.com/api/auth/resend-otp', { 
-        email,
+      console.log(`📍 Resending OTP to: ${BASE_URL}/auth/send-otp`);
+      
+      const response = await axios.post(`${BASE_URL}/auth/send-otp`, {
+        email: email,
         purpose: 'signup'
       });
-      setTimer(60);
-      setCanResend(false);
-      setOtp(['', '', '', '', '', '']);
-      setError('');
-      inputRefs.current[0]?.focus();
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to resend OTP');
+
+      if (response.data.success) {
+        setTimeLeft(300);
+        setCanResend(false);
+        setOtp(['', '', '', '', '', '']);
+        // Start timer again
+        const timer = setInterval(() => {
+          setTimeLeft(prev => {
+            if (prev <= 1) {
+              clearInterval(timer);
+              setCanResend(true);
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, 1000);
+        alert('New verification code sent!');
+      } else {
+        setError(response.data.message || 'Failed to resend code');
+      }
+    } catch (error) {
+      console.error('❌ Resend error:', error);
+      setError('Failed to resend verification code. Please try again.');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter') {
+      handleVerify();
     }
   };
 
   return (
     <div className="otp-verification-container">
       <div className="otp-verification-card">
-        <h3>Verify Your Email</h3>
-        <p className="otp-description">
-          We've sent a 6-digit verification code to <strong>{email}</strong>
-        </p>
+        <h2>Verify Your Email</h2>
         
+        <p className="otp-description">
+          We've sent a 6-digit verification code to
+          <br />
+          <strong>{email}</strong>
+        </p>
+
         <div className="otp-inputs">
           {otp.map((digit, index) => (
             <input
               key={index}
-              ref={el => inputRefs.current[index] = el}
+              id={`otp-${index}`}
               type="text"
-              inputMode="numeric"
-              pattern="\d*"
               maxLength="1"
               value={digit}
-              onChange={(e) => handleChange(index, e.target.value)}
-              onKeyDown={(e) => handleKeyDown(index, e)}
-              className="otp-input"
+              onChange={(e) => handleOtpChange(index, e.target.value)}
+              onKeyPress={handleKeyPress}
+              className={error ? 'error' : ''}
               disabled={isLoading}
+              autoFocus={index === 0}
             />
           ))}
         </div>
 
         {error && <div className="otp-error">{error}</div>}
 
-        <button
-          type="button"
-          onClick={handleVerify}
-          className="verify-otp-button"
-          disabled={isLoading}
-        >
-          {isLoading ? 'Verifying...' : 'Verify OTP'}
-        </button>
-
-        <div className="otp-footer">
-          {!canResend ? (
-            <p className="timer-text">
-              Resend code in <span className="timer">{timer}</span> seconds
-            </p>
+        <div className="otp-timer">
+          {timeLeft > 0 ? (
+            <span>Code expires in: {formatTime(timeLeft)}</span>
           ) : (
-            <button
-              type="button"
-              onClick={handleResend}
-              className="resend-button"
-              disabled={isLoading}
-            >
-              Resend OTP
-            </button>
+            <span>Code expired</span>
           )}
         </div>
 
-        <button
-          type="button"
-          onClick={onBack}
-          className="back-to-signup"
+        <button 
+          onClick={handleVerify} 
+          className="verify-button"
           disabled={isLoading}
         >
+          {isLoading ? 'Verifying...' : 'Verify & Continue'}
+        </button>
+
+        <div className="resend-section">
+          {canResend ? (
+            <button onClick={handleResend} className="resend-button">
+              Resend Code
+            </button>
+          ) : (
+            <span className="resend-disabled">
+              Resend available in {formatTime(timeLeft)}
+            </span>
+          )}
+        </div>
+
+        <button onClick={onBack} className="back-button">
           ← Back to Sign Up
         </button>
       </div>
     </div>
   );
-}
+};
 
 export default OTPVerification;

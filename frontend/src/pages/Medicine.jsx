@@ -4,7 +4,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import API from '../../api';
 import './Medicine.css';
 
 const Medicine = () => {
@@ -25,7 +25,7 @@ const Medicine = () => {
       setMessage('');
       
       console.log('🔍 Fetching medicines...');
-      const response = await axios.get('https://nexmed.onrender.com/api/medicines/all');
+      const response = await API.get('/medicines/all');
       console.log('✅ Medicines response:', response.data);
       
       if (response.data.success) {
@@ -42,18 +42,11 @@ const Medicine = () => {
           added_by_name: medicine.added_by_name || 'Unknown'
         }));
         
-        // Filter out any default/demo items
-        const realMedicines = safeMedicines.filter(medicine => {
-          if (medicine.name === 'Unnamed Medicine' || 
-              medicine.name.includes('Demo') || 
-              medicine.name.includes('Test') ||
-              medicine.description === 'No description available') {
-            return false;
-          }
-          return true;
-        });
         
-        setMedicines(realMedicines);
+        setMedicines(safeMedicines);
+        setMedicines(safeMedicines);
+        
+        setMedicines(safeMedicines);
       } else {
         setMessage('Failed to fetch medicines');
       }

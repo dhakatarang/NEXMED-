@@ -9,6 +9,14 @@ import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import './MedicalEquipmentDetails.css';
 
+// ✅ Get base URL dynamically
+const getBaseUrl = () => {
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    return 'http://localhost:5001';
+  }
+  return 'https://nexmed-backend.onrender.com';
+};
+
 const MedicalEquipmentDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -23,6 +31,8 @@ const MedicalEquipmentDetails = () => {
   const [aiAnalysis, setAiAnalysis] = useState(null);
   const [showAiDetails, setShowAiDetails] = useState(false);
 
+  const BASE_URL = getBaseUrl();
+
   useEffect(() => {
     fetchEquipmentDetails();
     fetchAiAnalysis();
@@ -31,7 +41,7 @@ const MedicalEquipmentDetails = () => {
   const fetchEquipmentDetails = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(`https://nexmed.onrender.com/api/equipments/${id}`);
+      const response = await axios.get(`${BASE_URL}/api/equipments/${id}`);
       
       if (response.data.success) {
         const equipmentData = {
@@ -67,7 +77,7 @@ const MedicalEquipmentDetails = () => {
       if (!token) return;
 
       const response = await axios.get(
-        `https://nexmed.onrender.com/api/equipment-scan/result/${id}`,
+        `${BASE_URL}/api/equipment-scan/result/${id}`,
         {
           headers: { Authorization: `Bearer ${token}` }
         }
@@ -106,7 +116,7 @@ const MedicalEquipmentDetails = () => {
 
       const token = localStorage.getItem("token");
       const response = await axios.post(
-        `https://nexmed.onrender.com/api/equipments/action/${id}`,
+        `${BASE_URL}/api/equipments/action/${id}`,
         payload,
         {
           headers: {
@@ -136,7 +146,7 @@ const MedicalEquipmentDetails = () => {
       setMessage('');
       const token = localStorage.getItem("token");
       
-      const response = await axios.post('https://nexmed.onrender.com/api/cart/add', {
+      const response = await axios.post(`${BASE_URL}/api/cart/add`, {
         itemId: equipment.id,
         itemType: 'medicalequipment',
         name: equipment.name,
@@ -262,7 +272,7 @@ const MedicalEquipmentDetails = () => {
           <div className="image-card">
             {equipment.image ? (
               <img 
-                src={`https://nexmed.onrender.com/uploads/${equipment.image}`} 
+                src={`${BASE_URL}/uploads/${equipment.image}`} 
                 alt={equipment.name}
                 className="details-image"
                 onError={(e) => {

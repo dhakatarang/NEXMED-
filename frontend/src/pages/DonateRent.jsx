@@ -1,11 +1,7 @@
-/*
 
-  Donate-Rent Page -> (On navbar)
-
-*/
 
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import API from '../../api';
 import './DonateRent.css';
 
 const DonateRent = () => {
@@ -151,10 +147,9 @@ const DonateRent = () => {
         return;
       }
 
-      const response = await axios.post('https://nexmed.onrender.com/api/donaterent/add', submitData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-          'Authorization': `Bearer ${token}`
+      const response = await API.post('/donaterent/add', submitData, {
+  headers: {
+    'Content-Type': 'multipart/form-data',
         }
       });
 

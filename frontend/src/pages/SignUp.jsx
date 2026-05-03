@@ -6,6 +6,26 @@ import axios from 'axios';
 import OTPVerification from '../components/OTPVerification';
 import './SignUp.css';
 
+// ✅ Dynamic base URL with debugging
+const getBaseUrl = () => {
+  const hostname = window.location.hostname;
+  const isLocal = hostname === 'localhost' || hostname === '127.0.0.1';
+  
+  console.log('🔍 DEBUG - Current URL:', window.location.href);
+  console.log('🔍 DEBUG - Hostname:', hostname);
+  console.log('🔍 DEBUG - Is local?', isLocal);
+  
+  if (isLocal) {
+    const localUrl = 'http://localhost:5001/api';
+    console.log('✅ Using LOCAL backend:', localUrl);
+    return localUrl;
+  }
+  
+  const prodUrl = 'https://nexmed-backend.onrender.com/api';
+  console.log('✅ Using PRODUCTION backend:', prodUrl);
+  return prodUrl;
+};
+
 function SignUp() {
     const [step, setStep] = useState('signup');
     const [formData, setFormData] = useState({
@@ -119,18 +139,22 @@ function SignUp() {
         }
     };
 
-    // ✅ FIXED: Use Render backend URL
     const sendOTP = async () => {
         try {
-            const response = await axios.post('https://nexmed.onrender.com/api/auth/send-otp', {
+            const baseUrl = getBaseUrl();
+            console.log(`📍 Sending OTP to: ${baseUrl}/auth/send-otp`);
+            
+            const response = await axios.post(`${baseUrl}/auth/send-otp`, {
                 email: formData.email.toLowerCase()
             });
             
             if (response.data.success) {
+                console.log('✅ OTP sent successfully');
                 return true;
             }
             return false;
         } catch (error) {
+            console.error('❌ OTP send error:', error);
             const errorMsg = error.response?.data?.message || 'Failed to send OTP';
             if (error.response?.status === 400) {
                 if (errorMsg.includes('already registered')) {
@@ -138,6 +162,8 @@ function SignUp() {
                 } else {
                     alert(errorMsg);
                 }
+            } else if (error.code === 'ERR_NETWORK') {
+                alert('Cannot connect to backend. Make sure backend is running on http://localhost:5001');
             } else {
                 alert('Failed to send OTP. Please check your email address.');
             }
@@ -187,8 +213,10 @@ function SignUp() {
                     submitData.append('medicalLicense', formData.medicalLicense);
                 }
 
-                // ✅ FIXED: Use Render backend URL
-                const res = await axios.post('https://nexmed.onrender.com/api/auth/signup', submitData, {
+                const baseUrl = getBaseUrl();
+                console.log(`📍 Submitting signup to: ${baseUrl}/auth/signup`);
+                
+                const res = await axios.post(`${baseUrl}/auth/signup`, submitData, {
                     headers: {
                         'Content-Type': 'multipart/form-data'
                     }
