@@ -4,10 +4,11 @@ import axios from 'axios';
 const getBaseURL = () => {
   // Production (deployed on Render/Vercel)
   if (import.meta.env.PROD) {
-    return 'https://nexmed.onrender.com/api';
+    // ✅ FIXED: Point to your actual backend URL
+    return 'https://nexmed-backend.onrender.com/api';
   }
   // Development (local)
-  return 'https://nexmed.onrender.com/api';
+  return 'http://localhost:5001/api'; // Assuming your backend runs on port 5001 locally
 };
 
 const API = axios.create({
