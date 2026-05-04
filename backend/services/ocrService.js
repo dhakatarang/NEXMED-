@@ -1,151 +1,209 @@
 // backend/services/ocrService.js
-const { createWorker } = require('tesseract.js');
-const fs = require('fs');
-const path = require('path');
+//utils/otpService.js
+const crypto = require('crypto');
+const nodemailer = require('nodemailer');
+const { mainDB } = require('../database/dbConnections');
+require('dotenv').config();
 
-async function processOCR(imagePath) {
-    try {
-        // Check if file exists
-        if (!fs.existsSync(imagePath)) {
-            throw new Error(`Image file not found: ${imagePath}`);
+// Create transporter
+let transporter;
+
+// Initialize email transporter
+const initTransporter = async () => {
+  if (!transporter) {
+    if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+      transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          user: process.env.EMAIL_USER,
+          pass: process.env.EMAIL_PASS
         }
+      });
+      console.log('📧 Real email configured for:', process.env.EMAIL_USER);
 
-        console.log('Starting OCR processing for:', imagePath);
-        
-        // Create a worker
-        const worker = await createWorker('eng');
-        
-        // Configure worker for better medicine text recognition
-        await worker.setParameters({
-            tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789/-:. ',
-            tessedit_pageseg_mode: '6', // Uniform block of text
-        });
-        
-        // Recognize text
-        const { data: { text } } = await worker.recognize(imagePath);
-        
-        // Terminate worker
-        await worker.terminate();
-        
-        console.log('OCR completed. Text length:', text.length);
-        return text;
-    } catch (error) {
-        console.error('OCR processing error:', error);
-        throw new Error(`OCR failed: ${error.message}`);
+      try {
+        await transporter.verify();
+        console.log('✅ Email connection verified successfully');
+      } catch (error) {
+        console.error('❌ Email verification failed:', error.message);
+        console.error('   Please check your EMAIL_USER and EMAIL_PASS environment variables');
+        transporter = null; // Reset so we fall back to console
+        return null;
+      }
+    } else {
+      console.log('⚠️ No email credentials found (EMAIL_USER / EMAIL_PASS).');
+      console.log('⚠️ OTP will be shown in server console only.');
+      return null;
     }
-}
+  }
+  return transporter;
+};
 
-function extractMedicineDetails(text) {
-    console.log('Extracting details from text...');
-    
-    const expiryDate = extractExpiryDate(text);
-    const medicineName = extractMedicineName(text);
-    const batchNumber = extractBatchNumber(text);
+// Generate OTP
+const generateOTP = () => {
+  return crypto.randomInt(100000, 999999).toString().padStart(6, '0');
+};
 
-    return { 
-        expiryDate, 
-        medicineName, 
-        batchNumber,
-        extractedText: text.substring(0, 500) // First 500 chars for preview
-    };
-}
+// Send OTP via email
+const sendOTPEmail = async (email, otp, purpose = 'signup') => {
+  const subject = purpose === 'signup' ? 'Email Verification' : 'Login Verification';
+  const message = purpose === 'signup'
+    ? 'Thank you for registering with NexMed Healthcare! Please verify your email address.'
+    : 'Use this OTP to complete your login.';
 
-function extractExpiryDate(text) {
-    const datePatterns = [
-        /\b(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})\b/g,
-        /\b(EXP:\s*(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}))\b/gi,
-        /\b(Expiry:\s*(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}))\b/gi,
-        /\b(Exp\. Date:\s*(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}))\b/gi,
-        /\b(Expiry\s*Date:\s*(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}))\b/gi,
-        /\b(\d{2,4}[\/\-]\d{1,2}[\/\-]\d{1,2})\b/g,
-        /\b(\d{1,2}\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{2,4})\b/gi,
-        /\b(Expires:\s*(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}))\b/gi
-    ];
+  const mailOptions = {
+    from: `"NexMed Healthcare" <${process.env.EMAIL_USER}>`,
+    to: email,
+    subject: `Your OTP Verification Code - ${subject}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px;">
+        <h2 style="color: #4CAF50; text-align: center;">NexMed Healthcare Platform</h2>
+        <div style="text-align: center; padding: 20px;">
+          <p style="font-size: 16px; color: #333;">${message}</p>
+          <div style="background-color: #f4f4f4; padding: 15px; font-size: 32px; font-weight: bold; text-align: center; letter-spacing: 5px; border-radius: 5px; margin: 20px 0;">
+            ${otp}
+          </div>
+          <p style="color: #666; font-size: 14px;">This code will expire in <strong>10 minutes</strong>.</p>
+          <p style="color: #666; font-size: 14px;">If you didn't request this, please ignore this email.</p>
+        </div>
+        <hr style="border: none; border-top: 1px solid #e0e0e0;">
+        <small style="color: #666; display: block; text-align: center;">This is an automated message, please do not reply.</small>
+      </div>
+    `
+  };
 
-    for (const pattern of datePatterns) {
-        const matches = text.match(pattern);
-        if (matches && matches[0]) {
-            let date = matches[0].replace(/EXP:\s*|Expiry:\s*|Exp\. Date:\s*|Expires:\s*/gi, '').trim();
-            
-            // Basic date format normalization
-            if (date.includes('/')) {
-                const parts = date.split('/');
-                if (parts[2] && parts[2].length === 2) {
-                    parts[2] = '20' + parts[2];
-                    date = parts.join('/');
-                }
-            }
-            console.log('Found expiry date:', date);
-            return date;
+  const transporterInstance = await initTransporter();
+
+  // Fallback: no email configured — print OTP to console (useful for local dev)
+  if (!transporterInstance) {
+    console.log('\n🔐 =========================================');
+    console.log(`🔐 OTP for ${email}: ${otp}`);
+    console.log('🔐 =========================================\n');
+    return { success: true, messageId: 'console-fallback' };
+  }
+
+  // Send real email
+  try {
+    const info = await transporterInstance.sendMail(mailOptions);
+    console.log('✅ Email sent successfully:', info.messageId);
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    console.error('❌ EMAIL SEND ERROR:', error.message);
+    throw new Error(`Failed to send OTP email: ${error.message}`);
+  }
+};
+
+// Store OTP in database
+const storeOTP = async (email, otp, purpose = 'signup') => {
+  // Delete any existing unverified OTPs for this email+purpose
+  await new Promise((resolve, reject) => {
+    mainDB.run(
+      `DELETE FROM otp_verification WHERE email = ? AND purpose = ? AND is_verified = 0`,
+      [email, purpose],
+      (err) => {
+        if (err) reject(err);
+        else resolve();
+      }
+    );
+  });
+
+  // Store new OTP with 10-minute expiry
+  const expiresAt = new Date();
+  expiresAt.setMinutes(expiresAt.getMinutes() + 10);
+
+  await new Promise((resolve, reject) => {
+    mainDB.run(
+      `INSERT INTO otp_verification (email, otp, purpose, expires_at, is_verified)
+       VALUES (?, ?, ?, ?, ?)`,
+      [email, otp, purpose, expiresAt.toISOString(), 0],
+      (err) => {
+        if (err) reject(err);
+        else resolve();
+      }
+    );
+  });
+};
+
+// Verify OTP
+const verifyOTP = async (email, userOTP, purpose = 'signup') => {
+  try {
+    const result = await new Promise((resolve, reject) => {
+      mainDB.get(
+        `SELECT * FROM otp_verification 
+         WHERE email = ? AND otp = ? AND purpose = ? AND is_verified = 0
+         ORDER BY created_at DESC LIMIT 1`,
+        [email, userOTP, purpose],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
         }
+      );
+    });
+
+    if (!result) {
+      return { valid: false, message: 'Invalid OTP. Please check and try again.' };
     }
 
-    console.log('No expiry date found, using default (1 year from now)');
-    // Return a default date 1 year from now if no date found
-    const defaultDate = new Date();
-    defaultDate.setFullYear(defaultDate.getFullYear() + 1);
-    return defaultDate.toISOString().split('T')[0];
-}
-
-function extractMedicineName(text) {
-    // Split into lines and clean
-    const lines = text.split('\n')
-        .filter(line => line.trim().length > 3)
-        .filter(line => !line.match(/expiry|exp|batch|lot|manufacturer|mg|ml|tablet|capsule|price|mrp|manufactured|date|address|www|http|@|phone|fax|email/i))
-        .filter(line => !line.match(/^\d+$|^\d+\.\d+$/)); // Filter out pure numbers
-    
-    // Look for common medicine name patterns
-    let medicineName = null;
-    
-    // Try to find a line that looks like a medicine name
-    for (const line of lines) {
-        // Check if line contains medicine-like words
-        if (line.match(/tablet|capsule|injection|syrup|drop|ointment|cream|gel/i)) {
-            medicineName = line.trim();
-            break;
-        }
-        // Check if line has proper length for a name (3-50 chars) and starts with capital letter
-        if (line.length >= 3 && line.length <= 50 && /^[A-Z]/.test(line) && !line.includes(' ')) {
-            medicineName = line.trim();
-            break;
-        }
-        // First line that looks like a name
-        if (!medicineName && line.length >= 3 && line.length <= 60 && !line.includes('http')) {
-            medicineName = line.trim();
-        }
-    }
-    
-    const name = medicineName || lines[0]?.trim() || 'Unknown Medicine';
-    console.log('Extracted medicine name:', name);
-    return name;
-}
-
-function extractBatchNumber(text) {
-    const batchPatterns = [
-        /Batch[:]?\s*([A-Z0-9\-]+)/i,
-        /Lot[:]?\s*([A-Z0-9\-]+)/i,
-        /B\.No[:]?\s*([A-Z0-9\-]+)/i,
-        /Batch\s*No[:]?\s*([A-Z0-9\-]+)/i,
-        /B\.No\.\s*([A-Z0-9\-]+)/i,
-        /Lot\s*No[:]?\s*([A-Z0-9\-]+)/i,
-        /Batch\s*Number[:]?\s*([A-Z0-9\-]+)/i,
-        /BN[:]?\s*([A-Z0-9\-]+)/i
-    ];
-
-    for (const pattern of batchPatterns) {
-        const match = text.match(pattern);
-        if (match && match[1]) {
-            const batch = match[1];
-            console.log('Extracted batch number:', batch);
-            return batch;
-        }
+    if (new Date(result.expires_at) < new Date()) {
+      await new Promise((resolve, reject) => {
+        mainDB.run(
+          `DELETE FROM otp_verification WHERE id = ?`,
+          [result.id],
+          (err) => {
+            if (err) reject(err);
+            else resolve();
+          }
+        );
+      });
+      return { valid: false, message: 'OTP has expired. Please request a new one.' };
     }
 
-    console.log('No batch number found');
-    return 'N/A';
-}
+    await new Promise((resolve, reject) => {
+      mainDB.run(
+        `UPDATE otp_verification SET is_verified = 1 WHERE id = ?`,
+        [result.id],
+        (err) => {
+          if (err) reject(err);
+          else resolve();
+        }
+      );
+    });
+
+    return { valid: true, message: 'OTP verified successfully' };
+  } catch (error) {
+    console.error('Error verifying OTP:', error);
+    return { valid: false, message: 'Error verifying OTP. Please try again.' };
+  }
+};
+
+// Resend OTP
+const resendOTP = async (email, purpose = 'signup') => {
+  const newOTP = generateOTP();
+  await storeOTP(email, newOTP, purpose);
+  await sendOTPEmail(email, newOTP, purpose);
+  return newOTP;
+};
+
+// Mark email as verified
+const markEmailAsVerified = async (email) => {
+  return new Promise((resolve, reject) => {
+    mainDB.run(
+      `UPDATE users SET email_verified = 1, updated_at = CURRENT_TIMESTAMP WHERE email = ?`,
+      [email],
+      (err) => {
+        if (err) reject(err);
+        else resolve();
+      }
+    );
+  });
+};
 
 module.exports = {
-    processOCR,
-    extractMedicineDetails
+  generateOTP,
+  sendOTPEmail,
+  storeOTP,
+  verifyOTP,
+  resendOTP,
+  markEmailAsVerified,
+  initTransporter
 };

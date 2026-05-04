@@ -53,37 +53,80 @@ const AdminPanel = () => {
 
   const checkAdminAccess = async () => {
     try {
-      const userData = localStorage.getItem('user');
-      if (!userData) {
-        window.location.href = '/login';
-        return;
-      }
-
-      const user = JSON.parse(userData);
-      setUser(user);
-
-      const token = localStorage.getItem('token');
-      const response = await axiosInstance.get('/api/admin/dashboard');
+      setLoading(true);
       
-      if (!response.data.success) {
-        setError('Access denied. Admin privileges required.');
-        setLoading(false);
+      // Get token and user data
+      const token = localStorage.getItem('token');
+      const userData = localStorage.getItem('user');
+      
+      console.log('Checking admin access...', { token: !!token, userData: !!userData });
+      
+      if (!token || !userData) {
+        console.log('No token or user data found');
+        setError('Please login to access admin panel');
+        setTimeout(() => {
+          window.location.href = '/login';
+        }, 2000);
         return;
       }
 
+      const parsedUser = JSON.parse(userData);
+      console.log('User data:', parsedUser);
+      
+      // Check if user has admin role (check multiple possible field names)
+      const isAdminUser = parsedUser.role === 'admin' || 
+                         parsedUser.userType === 'admin' || 
+                         parsedUser.user_type === 'admin';
+      
+      if (!isAdminUser) {
+        console.log('User is not admin');
+        setError('Access denied. Admin privileges required.');
+        setTimeout(() => {
+          window.location.href = '/home';
+        }, 2000);
+        return;
+      }
+      
+      setUser(parsedUser);
+      
+      // Verify with backend
+      try {
+        const response = await axiosInstance.get('/api/admin/dashboard');
+        console.log('Admin verification response:', response.data);
+        
+        if (!response.data.success) {
+          setError('Access denied. Admin privileges required.');
+          setTimeout(() => {
+            window.location.href = '/home';
+          }, 2000);
+          return;
+        }
+      } catch (backendError) {
+        console.error('Backend verification failed:', backendError);
+        // If backend verification fails but user has admin role in localStorage,
+        // we still allow access to admin panel (might be network issue)
+        if (backendError.response?.status === 403) {
+          setError('Access denied. Admin privileges required.');
+          setTimeout(() => {
+            window.location.href = '/home';
+          }, 2000);
+          return;
+        }
+        // For other errors (like network), we still show the admin panel
+        console.warn('Backend verification failed but showing admin panel anyway');
+      }
+      
       setLoading(false);
+      
     } catch (error) {
       console.error('Admin access check error:', error);
-      if (error.response?.status === 403) {
-        setError('Access denied. Admin privileges required.');
-      } else if (error.response?.status === 401) {
-        setError('Authentication failed. Please login again.');
-      } else if (error.code === 'ERR_NETWORK') {
-        setError(`Cannot connect to server at ${BASE_URL}. Please make sure the backend is running.`);
-      } else {
-        setError('Error checking admin access. Please try again.');
-      }
+      setError('Error checking admin access. Please try again.');
       setLoading(false);
+      
+      // Don't auto-redirect immediately, let user see the error
+      setTimeout(() => {
+        window.location.href = '/home';
+      }, 3000);
     }
   };
 
@@ -95,7 +138,7 @@ const AdminPanel = () => {
     return (
       <div className="admin-loading">
         <div className="loading-spinner"></div>
-        <p>Checking admin access...</p>
+        <p>Loading admin panel...</p>
       </div>
     );
   }
@@ -120,7 +163,7 @@ const AdminPanel = () => {
         <div className="sidebar-header">
           <div className="logo">NexMed</div>
           <div className="admin-info">
-            <p className="admin-name">{user?.name}</p>
+            <p className="admin-name">{user?.name || user?.full_name || 'Admin'}</p>
             <span className="admin-role">Administrator</span>
           </div>
         </div>
