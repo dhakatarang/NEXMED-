@@ -13,7 +13,10 @@ const Navbar = () => {
   useEffect(() => {
     const userData = localStorage.getItem('user');
     if (userData) {
-      setUser(JSON.parse(userData));
+      const parsedUser = JSON.parse(userData);
+      console.log('Navbar - User loaded:', parsedUser);
+      console.log('Navbar - User role:', parsedUser.role, parsedUser.userType, parsedUser.user_type);
+      setUser(parsedUser);
     }
 
     const handleLoginChange = () => {
@@ -56,6 +59,12 @@ const Navbar = () => {
 
   const isActiveRoute = (path) => {
     return location.pathname === path;
+  };
+
+  // Helper function to check if user is admin
+  const isAdmin = () => {
+    if (!user) return false;
+    return user.role === 'admin' || user.userType === 'admin' || user.user_type === 'admin';
   };
 
   return (
@@ -177,9 +186,9 @@ const Navbar = () => {
                   <Link to="/cart" className="dropdown-item" onClick={closeDropdown}>
                     Cart
                   </Link>
-                  {user.role === 'admin' && (
+                  {isAdmin() && (
                     <Link to="/admin" className="dropdown-item" onClick={closeDropdown}>
-                      Admin Panel
+                      👑 Admin Panel
                     </Link>
                   )}
                   <div className="dropdown-divider"></div>

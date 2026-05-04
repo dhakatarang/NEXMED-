@@ -1,9 +1,3 @@
-/*
-
-  Dashboard -> (Admin Dashboard)
-
-*/
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -17,6 +11,7 @@ const Dashboard = () => {
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState('overview');
   const [isAdmin, setIsAdmin] = useState(false);
+  const [imageErrors, setImageErrors] = useState(new Set());
   const navigate = useNavigate();
 
   // ✅ Get base URL dynamically based on environment
@@ -24,7 +19,7 @@ const Dashboard = () => {
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
       return 'http://localhost:5001';
     }
-    return 'https://nexmed.onrender.com';
+    return 'https://nexmed-backend.onrender.com';
   };
 
   const BASE_URL = getBaseUrl();
@@ -76,6 +71,7 @@ const Dashboard = () => {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
+      setError('');
       
       // Fetch medicines
       const medicinesRes = await axiosInstance.get('/api/medicines/all');
@@ -105,6 +101,7 @@ const Dashboard = () => {
           }
         } catch (e) {
           console.log('No users endpoint found');
+          setUsers([]);
         }
       }
       
@@ -152,8 +149,13 @@ const Dashboard = () => {
   const getImageUrl = (imagePath) => {
     if (!imagePath) return null;
     if (imagePath.startsWith('http')) return imagePath;
+    if (imagePath.startsWith('/uploads/')) return `${BASE_URL}${imagePath}`;
     if (imagePath.startsWith('/')) return `${BASE_URL}${imagePath}`;
     return `${BASE_URL}/uploads/${imagePath}`;
+  };
+
+  const handleImageError = (userId) => {
+    setImageErrors(prev => new Set(prev.add(userId)));
   };
 
   if (!isAdmin && !loading) {
@@ -362,7 +364,7 @@ const Dashboard = () => {
                     </span>
                   </div>
                   
-                  <p className="item-description">{medicine.description?.substring(0, 100)}</p>
+                  <p className="item-description">{medicine.description?.substring(0, 100)}...</p>
                   
                   <div className="item-details">
                     <div className="detail-row">
@@ -423,12 +425,14 @@ const Dashboard = () => {
                     </span>
                   </div>
                   
-                  <p className="item-description">{equipment.description?.substring(0, 100)}</p>
+                  <p className="item-description">{equipment.description?.substring(0, 100)}...</p>
                   
                   <div className="item-details">
                     <div className="detail-row">
                       <span>Condition:</span>
-                      <span>{equipment.condition || 'Good'}</span>
+                      <span className={`condition-${equipment.condition || 'good'}`}>
+                        {equipment.condition || 'Good'}
+                      </span>
                     </div>
                     <div className="detail-row">
                       <span>Quantity:</span>
@@ -484,23 +488,27 @@ const Dashboard = () => {
               {users.map(user => (
                 <div key={user.id} className="user-card">
                   <div className="user-avatar">
-                    {user.profile_photo ? (
-                      <img src={getImageUrl(user.profile_photo)} alt={user.name} />
+                    {user.profile_photo && !imageErrors.has(user.id) ? (
+                      <img 
+                        src={getImageUrl(user.profile_photo)} 
+                        alt={user.name}
+                        onError={() => handleImageError(user.id)}
+                      />
                     ) : (
                       <div className="avatar-placeholder">
-                        {user.name?.charAt(0)?.toUpperCase() || 'U'}
+                        {user.name?.charAt(0)?.toUpperCase() || user.email?.charAt(0)?.toUpperCase() || 'U'}
                       </div>
                     )}
                   </div>
                   
                   <div className="user-info">
-                    <h4>{user.name}</h4>
+                    <h4>{user.name || user.full_name || 'Unknown User'}</h4>
                     <p className="user-email">{user.email}</p>
                     <div className="user-meta">
-                      <span className="user-type">{user.user_type || user.userType || 'user'}</span>
+                      <span className="user-type">{user.user_type || user.userType || user.role || 'user'}</span>
                       <span className="user-id">ID: {user.id}</span>
-                      <span className={`user-status ${user.is_active ? 'active' : 'inactive'}`}>
-                        {user.is_active ? 'Active' : 'Inactive'}
+                      <span className={`user-status ${user.is_active !== false ? 'active' : 'inactive'}`}>
+                        {user.is_active !== false ? 'Active' : 'Inactive'}
                       </span>
                     </div>
                   </div>

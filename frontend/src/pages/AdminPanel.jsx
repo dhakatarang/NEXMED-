@@ -1,4 +1,3 @@
-// frontend/src/pages/AdminPanel.jsx
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import axios from 'axios';
@@ -18,6 +17,36 @@ const AdminPanel = () => {
   const [error, setError] = useState('');
   const location = useLocation();
 
+  // Get base URL dynamically
+  const getBaseUrl = () => {
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      return 'http://localhost:5001';
+    }
+    return 'https://nexmed-backend.onrender.com';
+  };
+
+  const BASE_URL = getBaseUrl();
+
+  // Create axios instance with dynamic base URL
+  const axiosInstance = axios.create({
+    baseURL: BASE_URL,
+    headers: {
+      'Content-Type': 'application/json'
+    }
+  });
+
+  // Add token to requests
+  axiosInstance.interceptors.request.use(
+    (config) => {
+      const token = localStorage.getItem('token');
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+      return config;
+    },
+    (error) => Promise.reject(error)
+  );
+
   useEffect(() => {
     checkAdminAccess();
   }, []);
@@ -34,11 +63,7 @@ const AdminPanel = () => {
       setUser(user);
 
       const token = localStorage.getItem('token');
-      const response = await axios.get('https://nexmed.onrender.com/api/admin/dashboard', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      const response = await axiosInstance.get('/api/admin/dashboard');
       
       if (!response.data.success) {
         setError('Access denied. Admin privileges required.');
@@ -48,10 +73,13 @@ const AdminPanel = () => {
 
       setLoading(false);
     } catch (error) {
+      console.error('Admin access check error:', error);
       if (error.response?.status === 403) {
         setError('Access denied. Admin privileges required.');
       } else if (error.response?.status === 401) {
         setError('Authentication failed. Please login again.');
+      } else if (error.code === 'ERR_NETWORK') {
+        setError(`Cannot connect to server at ${BASE_URL}. Please make sure the backend is running.`);
       } else {
         setError('Error checking admin access. Please try again.');
       }
