@@ -218,3 +218,250 @@
     max-height: 60vh;
   }
 }
+/* Add these styles to your existing Notifications.css */
+
+/* Override container positioning for navbar integration */
+.notifications-container {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  margin-right: 0.5rem;
+}
+
+/* Style the bell button to match profile button */
+.notifications-container .notification-bell {
+  background: transparent;
+  border: none;
+  font-size: 1.25rem;
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  position: relative;
+  color: #4b5563;
+}
+
+.notifications-container .notification-bell:hover {
+  background-color: #f3f4f6;
+  transform: scale(1.05);
+}
+
+/* Badge styling */
+.notifications-container .notification-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  background-color: #ef4444;
+  color: white;
+  font-size: 0.625rem;
+  font-weight: bold;
+  padding: 0.125rem 0.375rem;
+  border-radius: 9999px;
+  min-width: 1rem;
+  text-align: center;
+  line-height: 1;
+}
+
+/* Dropdown positioning - adjusted to appear below the bell */
+.notifications-container .notifications-dropdown {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  width: 380px;
+  max-width: 90vw;
+  background: white;
+  border-radius: 0.75rem;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  z-index: 1000;
+  overflow: hidden;
+  animation: slideDown 0.2s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Rest of your existing Notifications.css styles remain the same */
+.notifications-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.notifications-header h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #111827;
+}
+
+.mark-all-read {
+  background: none;
+  border: none;
+  color: #3b82f6;
+  font-size: 0.75rem;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.375rem;
+  transition: background 0.2s;
+}
+
+.mark-all-read:hover {
+  background: #eff6ff;
+}
+
+.notifications-list {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.notification-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 1rem;
+  cursor: pointer;
+  transition: background 0.2s;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.notification-item:hover {
+  background: #f9fafb;
+}
+
+.notification-item.unread {
+  background: #eff6ff;
+}
+
+.notification-item.unread:hover {
+  background: #dbeafe;
+}
+
+.notification-icon {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.notification-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.notification-message {
+  margin: 0 0 0.25rem 0;
+  font-size: 0.875rem;
+  color: #111827;
+  line-height: 1.4;
+}
+
+.notification-time {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.notification-unread-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  background-color: #3b82f6;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 0.5rem;
+}
+
+.no-notifications {
+  text-align: center;
+  padding: 2rem;
+  color: #6b7280;
+}
+
+.no-notif-icon {
+  font-size: 2rem;
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+.no-notifications p {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.notifications-footer {
+  padding: 0.75rem;
+  border-top: 1px solid #e5e7eb;
+  text-align: center;
+  background: #f9fafb;
+}
+
+.close-dropdown {
+  background: none;
+  border: none;
+  color: #6b7280;
+  font-size: 0.875rem;
+  cursor: pointer;
+  padding: 0.5rem 1rem;
+  border-radius: 0.375rem;
+  transition: all 0.2s;
+}
+
+.close-dropdown:hover {
+  background: #e5e7eb;
+  color: #111827;
+}
+
+/* Mobile responsive adjustments */
+@media (max-width: 768px) {
+  .notifications-container .notifications-dropdown {
+    position: fixed;
+    top: auto;
+    bottom: auto;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 95vw;
+    max-height: 80vh;
+  }
+  
+  .notifications-container .notifications-dropdown {
+    animation: slideUp 0.2s ease-out;
+  }
+  
+  @keyframes slideUp {
+    from {
+      opacity: 0;
+      transform: translateX(-50%) translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+  }
+}
+
+/* For very small screens */
+@media (max-width: 480px) {
+  .notifications-container .notifications-dropdown {
+    width: 100vw;
+    border-radius: 0.75rem 0.75rem 0 0;
+    bottom: 0;
+    top: auto;
+    transform: translateX(-50%);
+  }
+}

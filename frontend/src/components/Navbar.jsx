@@ -1,12 +1,7 @@
-/*
-  Navbar -> (navbar for Admin)
-*/
-
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import './Navbar.css';
 import Notifications from './Notifications';
-
 
 const Navbar = () => {
   const [user, setUser] = useState(null);
@@ -147,6 +142,9 @@ const Navbar = () => {
         <div className="nav-user">
           {user ? (
             <div className="user-menu">
+              {/* Notifications Component - Integrated here */}
+              <Notifications />
+              
               <button className="profile-icon-btn" onClick={toggleDropdown}>
                 <svg className="user-icon" viewBox="0 0 24 24" fill="none">
                   <path d="M20 21V19C20 16.8 18.2 15 16 15H8C5.8 15 4 16.8 4 19V21" stroke="currentColor" strokeWidth="1.5"/>
@@ -215,9 +213,6 @@ const Navbar = () => {
       {/* Overlays */}
       {dropdownOpen && <div className="overlay" onClick={closeDropdown}></div>}
       {mobileMenuOpen && <div className="overlay" onClick={closeMobileMenu}></div>}
-      // Add this to your navbar
-<Notifications />
-
     </nav>
   );
 };

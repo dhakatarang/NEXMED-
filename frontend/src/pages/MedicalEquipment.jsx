@@ -1,10 +1,5 @@
-/*
-  MedicineEquipment Page -> (on navbar)
-*/
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-
 import API from '../../api';
 import './MedicalEquipment.css';
 
@@ -17,6 +12,16 @@ const MedicalEquipment = () => {
   const [activeFilter, setActiveFilter] = useState('all');
   const navigate = useNavigate();
 
+  // Get base URL dynamically
+  const getBaseUrl = () => {
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      return 'http://localhost:5001';
+    }
+    return 'https://nexmed-backend.onrender.com';
+  };
+
+  const BASE_URL = getBaseUrl();
+
   useEffect(() => {
     fetchEquipments();
   }, []);
@@ -24,7 +29,7 @@ const MedicalEquipment = () => {
   const fetchEquipments = async () => {
     try {
       setLoading(true);
-      const response = await API.get('/equipments/all');;
+      const response = await API.get('/equipments/all');
       
       if (response.data.success) {
         const safeEquipments = response.data.equipments.map(equipment => ({
@@ -40,11 +45,6 @@ const MedicalEquipment = () => {
           condition: equipment.condition || 'good'
         }));
         
-        // Filter out any default/demo items
-        
-        setEquipments(safeEquipments);
-
-        setEquipments(safeEquipments)
         setEquipments(safeEquipments);
       } else {
         setMessage('Failed to fetch medical equipment');
@@ -59,6 +59,14 @@ const MedicalEquipment = () => {
 
   const handleImageError = (equipmentId) => {
     setImageErrors(prev => new Set(prev.add(equipmentId)));
+  };
+
+  const getImageUrl = (imagePath) => {
+    if (!imagePath) return null;
+    // If it's already a full URL, return as is
+    if (imagePath.startsWith('http')) return imagePath;
+    // Otherwise, construct URL with base URL
+    return `${BASE_URL}/uploads/${imagePath}`;
   };
 
   const handleViewDetails = (equipmentId) => {
@@ -204,7 +212,7 @@ const MedicalEquipment = () => {
               <div className="med-equip-card-image-modern">
                 {equipment.image && !imageErrors.has(equipment.id) ? (
                   <img 
-                    src={`https://nexmed.onrender.com/uploads/${equipment.image}`} 
+                    src={getImageUrl(equipment.image)} 
                     alt={equipment.name}
                     onError={() => handleImageError(equipment.id)}
                   />

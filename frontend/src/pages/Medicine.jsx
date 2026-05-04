@@ -1,7 +1,3 @@
-/*
-  Medicine Page -> (On Navbar)
-*/
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import API from '../../api';
@@ -13,7 +9,18 @@ const Medicine = () => {
   const [message, setMessage] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [activeFilter, setActiveFilter] = useState('all');
+  const [imageErrors, setImageErrors] = useState(new Set());
   const navigate = useNavigate();
+
+  // Get base URL dynamically
+  const getBaseUrl = () => {
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      return 'http://localhost:5001';
+    }
+    return 'https://nexmed-backend.onrender.com';
+  };
+
+  const BASE_URL = getBaseUrl();
 
   useEffect(() => {
     fetchMedicines();
@@ -42,10 +49,6 @@ const Medicine = () => {
           added_by_name: medicine.added_by_name || 'Unknown'
         }));
         
-        
-        setMedicines(safeMedicines);
-        setMedicines(safeMedicines);
-        
         setMedicines(safeMedicines);
       } else {
         setMessage('Failed to fetch medicines');
@@ -63,6 +66,18 @@ const Medicine = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleImageError = (medicineId) => {
+    setImageErrors(prev => new Set(prev.add(medicineId)));
+  };
+
+  const getImageUrl = (imagePath) => {
+    if (!imagePath) return null;
+    // If it's already a full URL, return as is
+    if (imagePath.startsWith('http')) return imagePath;
+    // Otherwise, construct URL with base URL
+    return `${BASE_URL}/uploads/${imagePath}`;
   };
 
   const handleViewDetails = (medicineId) => {
@@ -193,14 +208,11 @@ const Medicine = () => {
           {filteredMedicines.map(medicine => (
             <div key={medicine.id} className="med-card-modern">
               <div className="med-card-image-modern">
-                {medicine.image ? (
+                {medicine.image && !imageErrors.has(medicine.id) ? (
                   <img 
-                    src={`https://nexmed.onrender.com/uploads/${medicine.image}`} 
+                    src={getImageUrl(medicine.image)} 
                     alt={medicine.name}
-                    onError={(e) => {
-                      e.target.style.display = 'none';
-                      e.target.parentNode.classList.add('image-fallback');
-                    }}
+                    onError={() => handleImageError(medicine.id)}
                   />
                 ) : (
                   <div className="med-image-placeholder-modern">

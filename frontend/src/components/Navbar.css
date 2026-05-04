@@ -509,3 +509,26 @@
     padding: 0.4rem;
   }
 }
+/* Add to your Navbar.css - ensure user-menu has flex alignment */
+.user-menu {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Adjust profile button margin if needed */
+.profile-icon-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  border-radius: 0.5rem;
+  transition: background 0.2s;
+}
+
+.profile-icon-btn:hover {
+  background-color: #f3f4f6;
+}
