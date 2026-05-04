@@ -1,9 +1,26 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import './MedicineCard.css';
+import ExpiryBadge from './ExpiryBadge';
+
+// Add this inside your MedicineCard component, near the top
+
 
 const MedicineCard = ({ medicine }) => {
+  {medicine.expiryDate && (
+  <ExpiryBadge expiryDate={medicine.expiryDate} />
+)}
   const navigate = useNavigate();
+
+  // ✅ Get base URL dynamically based on environment
+  const getBaseUrl = () => {
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      return 'http://localhost:5001';
+    }
+    return 'https://nexmed.onrender.com';
+  };
+
+  const BASE_URL = getBaseUrl();
 
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
@@ -53,7 +70,7 @@ const MedicineCard = ({ medicine }) => {
     return `Valid until ${formatDate(medicine.expiryDate)}`;
   };
 
-  // FIXED: Function to get the correct image URL
+  // ✅ FIXED: Function to get the correct image URL for localhost
   const getImageUrl = (imagePath) => {
     if (!imagePath) return null;
     
@@ -64,11 +81,11 @@ const MedicineCard = ({ medicine }) => {
     
     // If it's a local path (starts with /uploads or similar)
     if (imagePath.startsWith('/')) {
-      return `https://nexmed.onrender.com${imagePath}`;
+      return `${BASE_URL}${imagePath}`;
     }
     
-    // Fallback for relative paths
-    return `https://nexmed.onrender.com/uploads/${imagePath}`;
+    // For localhost, use the full URL
+    return `${BASE_URL}/uploads/${imagePath}`;
   };
 
   const handleClick = () => {
@@ -86,7 +103,7 @@ const MedicineCard = ({ medicine }) => {
       onKeyPress={(e) => e.key === 'Enter' && handleClick()}
     >
       <div className="card-image-container">
-        {/* FIXED: Image handling with correct URL function */}
+        {/* ✅ FIXED: Image handling with correct URL function for localhost */}
         {medicine.image_path || medicine.imageUrl ? (
           <img 
             src={getImageUrl(medicine.image_path || medicine.imageUrl)} 
@@ -96,7 +113,10 @@ const MedicineCard = ({ medicine }) => {
               e.target.style.display = 'none';
               e.target.parentNode.classList.add('image-fallback');
               // Show emoji placeholder on error
-              e.target.parentNode.innerHTML = '<div class="image-placeholder">💊</div>';
+              const placeholder = document.createElement('div');
+              placeholder.className = 'image-placeholder';
+              placeholder.innerHTML = '💊';
+              e.target.parentNode.appendChild(placeholder);
             }}
           />
         ) : (
@@ -126,7 +146,7 @@ const MedicineCard = ({ medicine }) => {
           <div className="detail-item">
             <span className="detail-label">Price</span>
             <span className="detail-value">
-              {medicine.price === 0 ? 'Free' : `$${medicine.price}`}
+              {medicine.price === 0 ? 'Free' : `₹${medicine.price}`}
             </span>
           </div>
           

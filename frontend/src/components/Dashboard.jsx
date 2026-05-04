@@ -16,51 +16,126 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState('overview');
+  const [isAdmin, setIsAdmin] = useState(false);
   const navigate = useNavigate();
 
+  // ✅ Get base URL dynamically based on environment
+  const getBaseUrl = () => {
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      return 'http://localhost:5001';
+    }
+    return 'https://nexmed.onrender.com';
+  };
+
+  const BASE_URL = getBaseUrl();
+
+  // ✅ Axios instance with auth header
+  const axiosInstance = axios.create({
+    baseURL: BASE_URL,
+    headers: {
+      'Content-Type': 'application/json'
+    }
+  });
+
+  // Add token to requests
+  axiosInstance.interceptors.request.use(
+    (config) => {
+      const token = localStorage.getItem('token');
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+      return config;
+    },
+    (error) => Promise.reject(error)
+  );
+
   useEffect(() => {
-    fetchDashboardData();
+    checkAdminAccess();
   }, []);
+
+  const checkAdminAccess = () => {
+    const token = localStorage.getItem('token');
+    const userStr = localStorage.getItem('user');
+    
+    if (!token) {
+      setError('Please login to access dashboard');
+      setTimeout(() => navigate('/login'), 2000);
+      return;
+    }
+    
+    try {
+      const user = JSON.parse(userStr || '{}');
+      // Check if user is admin
+      if (user.userType !== 'admin' && user.user_type !== 'admin' && user.email !== 'admin@nexmed.com') {
+        setError('Access denied. Admin privileges required.');
+        setTimeout(() => navigate('/home'), 2000);
+        return;
+      }
+      
+      setIsAdmin(true);
+      fetchDashboardData();
+    } catch (err) {
+      setError('Authentication error. Please login again.');
+      setTimeout(() => navigate('/login'), 2000);
+    }
+  };
 
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
+      setError('');
       
       // Fetch medicines
-      const medicinesRes = await axios.get('https://nexmed.onrender.com/api/medicines/all');
+      const medicinesRes = await axiosInstance.get('/api/medicines/all');
       if (medicinesRes.data.success) {
         setMedicines(medicinesRes.data.medicines || []);
+      } else {
+        console.log('Medicines fetch failed:', medicinesRes.data.message);
       }
       
       // Fetch equipment
-      const equipmentsRes = await axios.get('https://nexmed.onrender.com/api/equipments/all');
+      const equipmentsRes = await axiosInstance.get('/api/equipments/all');
       if (equipmentsRes.data.success) {
         setEquipments(equipmentsRes.data.equipments || []);
+      } else {
+        console.log('Equipment fetch failed:', equipmentsRes.data.message);
       }
       
-      // Fetch users (if admin endpoint exists)
+      // Fetch users (admin only)
       try {
-        const usersRes = await axios.get('https://nexmed.onrender.com/api/users');
+        const usersRes = await axiosInstance.get('/api/admin/users');
         if (usersRes.data.success) {
           setUsers(usersRes.data.users || []);
         }
       } catch (err) {
-        console.log('Users endpoint not available');
+        console.log('Users endpoint not available, trying alternative...');
+        // Try alternative endpoint
+        try {
+          const usersRes = await axiosInstance.get('/api/users/all');
+          if (usersRes.data.success) {
+            setUsers(usersRes.data.users || []);
+          }
+        } catch (e) {
+          console.log('No users endpoint found');
+          // Set some demo users for display
+          setUsers([]);
+        }
       }
       
     } catch (err) {
       console.error('Dashboard error:', err);
-      setError('Failed to fetch dashboard data');
+      setError('Failed to fetch dashboard data: ' + (err.response?.data?.message || err.message));
     } finally {
       setLoading(false);
     }
   };
 
   const calculateExpiryStatus = (medicine) => {
-    if (!medicine.expiry_date) return null;
+    const expiryDateStr = medicine.expiry_date || medicine.expiryDate;
+    if (!expiryDateStr) return null;
     
     const today = new Date();
-    const expiryDate = new Date(medicine.expiry_date);
+    const expiryDate = new Date(expiryDateStr);
     const daysUntilExpiry = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
     
     if (daysUntilExpiry < 0) return 'expired';
@@ -73,7 +148,7 @@ const Dashboard = () => {
   const validMedicines = medicines.filter(med => calculateExpiryStatus(med) === 'valid');
 
   const getOptionTypeCount = (items, type) => {
-    return items.filter(item => item.optionType === type).length;
+    return items.filter(item => (item.option_type === type || item.optionType === type)).length;
   };
 
   const getTotalValue = (items) => {
@@ -81,8 +156,32 @@ const Dashboard = () => {
   };
 
   const handleViewItem = (type, id) => {
-    navigate(`/${type}/${id}`);
+    if (type === 'medicines') {
+      navigate(`/medicines/${id}`);
+    } else if (type === 'medicalequipments') {
+      navigate(`/medicalequipments/${id}`);
+    }
   };
+
+  const getImageUrl = (imagePath) => {
+    if (!imagePath) return null;
+    if (imagePath.startsWith('http')) return imagePath;
+    if (imagePath.startsWith('/')) return `${BASE_URL}${imagePath}`;
+    return `${BASE_URL}/uploads/${imagePath}`;
+  };
+
+  if (!isAdmin && !loading) {
+    return (
+      <div className="dashboard-error-container">
+        <div className="error-icon">⚠️</div>
+        <h2>Access Denied</h2>
+        <p>{error || 'You do not have permission to access this page.'}</p>
+        <button onClick={() => navigate('/home')} className="btn btn-primary">
+          Go Back Home
+        </button>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -97,9 +196,14 @@ const Dashboard = () => {
     <div className="dashboard-page">
       <div className="dashboard-header">
         <h1>Admin Dashboard</h1>
-        <button className="refresh-btn" onClick={fetchDashboardData}>
-          Refresh Data
-        </button>
+        <div className="header-actions">
+          <button className="refresh-btn" onClick={fetchDashboardData}>
+            🔄 Refresh Data
+          </button>
+          <button className="back-btn" onClick={() => navigate('/home')}>
+            ← Back to Home
+          </button>
+        </div>
       </div>
 
       {error && <div className="dashboard-error">{error}</div>}
@@ -110,25 +214,25 @@ const Dashboard = () => {
           className={`tab-btn ${activeTab === 'overview' ? 'active' : ''}`}
           onClick={() => setActiveTab('overview')}
         >
-          Overview
+          📊 Overview
         </button>
         <button 
           className={`tab-btn ${activeTab === 'medicines' ? 'active' : ''}`}
           onClick={() => setActiveTab('medicines')}
         >
-          Medicines
+          💊 Medicines ({medicines.length})
         </button>
         <button 
           className={`tab-btn ${activeTab === 'equipment' ? 'active' : ''}`}
           onClick={() => setActiveTab('equipment')}
         >
-          Equipment
+          ⚕️ Equipment ({equipments.length})
         </button>
         <button 
           className={`tab-btn ${activeTab === 'users' ? 'active' : ''}`}
           onClick={() => setActiveTab('users')}
         >
-          Users
+          👥 Users ({users.length})
         </button>
       </div>
 
@@ -165,7 +269,7 @@ const Dashboard = () => {
               <div className="stat-icon">💰</div>
               <div className="stat-content">
                 <span className="stat-label">Total Value</span>
-                <span className="stat-value">₹{getTotalValue([...medicines, ...equipments])}</span>
+                <span className="stat-value">₹{getTotalValue([...medicines, ...equipments]).toLocaleString()}</span>
               </div>
             </div>
           </div>
@@ -173,19 +277,19 @@ const Dashboard = () => {
           {/* Status Cards */}
           <div className="status-grid">
             <div className="status-card warning">
-              <h3>Expiring Soon</h3>
+              <h3>⚠️ Expiring Soon</h3>
               <p className="status-number">{expiringMedicines.length}</p>
               <p className="status-label">Medicines expiring in 30 days</p>
             </div>
             
             <div className="status-card expired">
-              <h3>Expired</h3>
+              <h3>❌ Expired</h3>
               <p className="status-number">{expiredMedicines.length}</p>
               <p className="status-label">Medicines past expiry date</p>
             </div>
             
             <div className="status-card valid">
-              <h3>Valid</h3>
+              <h3>✅ Valid</h3>
               <p className="status-number">{validMedicines.length}</p>
               <p className="status-label">Medicines within expiry</p>
             </div>
@@ -234,7 +338,9 @@ const Dashboard = () => {
                 <div key={med.id} className="recent-item">
                   <div className="recent-info">
                     <strong>{med.name}</strong>
-                    <span className="recent-type">{med.optionType}</span>
+                    <span className={`recent-type ${med.option_type || med.optionType}`}>
+                      {med.option_type || med.optionType}
+                    </span>
                   </div>
                   <button 
                     className="view-btn small"
@@ -258,7 +364,10 @@ const Dashboard = () => {
           </div>
           
           {medicines.length === 0 ? (
-            <p className="empty-message">No medicines found</p>
+            <div className="empty-state">
+              <div className="empty-icon">💊</div>
+              <p>No medicines found</p>
+            </div>
           ) : (
             <div className="items-grid">
               {medicines.map(medicine => (
@@ -270,12 +379,14 @@ const Dashboard = () => {
                     </span>
                   </div>
                   
-                  <p className="item-description">{medicine.description}</p>
+                  <p className="item-description">{medicine.description?.substring(0, 100)}</p>
                   
                   <div className="item-details">
                     <div className="detail-row">
                       <span>Type:</span>
-                      <span className={`type-tag ${medicine.optionType}`}>{medicine.optionType}</span>
+                      <span className={`type-tag ${medicine.option_type || medicine.optionType}`}>
+                        {medicine.option_type || medicine.optionType}
+                      </span>
                     </div>
                     <div className="detail-row">
                       <span>Quantity:</span>
@@ -287,10 +398,10 @@ const Dashboard = () => {
                         <span className="price">₹{medicine.price}</span>
                       </div>
                     )}
-                    {medicine.expiry_date && (
+                    {(medicine.expiry_date || medicine.expiryDate) && (
                       <div className="detail-row">
                         <span>Expires:</span>
-                        <span>{new Date(medicine.expiry_date).toLocaleDateString()}</span>
+                        <span>{new Date(medicine.expiry_date || medicine.expiryDate).toLocaleDateString()}</span>
                       </div>
                     )}
                   </div>
@@ -317,34 +428,39 @@ const Dashboard = () => {
           </div>
           
           {equipments.length === 0 ? (
-            <p className="empty-message">No equipment found</p>
+            <div className="empty-state">
+              <div className="empty-icon">⚕️</div>
+              <p>No equipment found</p>
+            </div>
           ) : (
             <div className="items-grid">
               {equipments.map(equipment => (
                 <div key={equipment.id} className="item-card">
                   <div className="item-card-header">
                     <h4>{equipment.name}</h4>
-                    <span className={`type-tag ${equipment.optionType}`}>{equipment.optionType}</span>
+                    <span className={`type-tag ${equipment.option_type || equipment.optionType}`}>
+                      {equipment.option_type || equipment.optionType}
+                    </span>
                   </div>
                   
-                  <p className="item-description">{equipment.description}</p>
+                  <p className="item-description">{equipment.description?.substring(0, 100)}</p>
                   
                   <div className="item-details">
                     <div className="detail-row">
                       <span>Condition:</span>
-                      <span>{equipment.condition}</span>
+                      <span>{equipment.condition || 'Good'}</span>
                     </div>
                     <div className="detail-row">
                       <span>Quantity:</span>
                       <span>{equipment.quantity}</span>
                     </div>
-                    {equipment.optionType === 'sell' && equipment.price > 0 && (
+                    {(equipment.option_type === 'sell' || equipment.optionType === 'sell') && equipment.price > 0 && (
                       <div className="detail-row">
                         <span>Price:</span>
                         <span className="price">₹{equipment.price}</span>
                       </div>
                     )}
-                    {equipment.optionType === 'rent' && equipment.rentPrice > 0 && (
+                    {(equipment.option_type === 'rent' || equipment.optionType === 'rent') && equipment.rentPrice > 0 && (
                       <>
                         <div className="detail-row">
                           <span>Rent/Day:</span>
@@ -382,14 +498,17 @@ const Dashboard = () => {
           </div>
           
           {users.length === 0 ? (
-            <p className="empty-message">No users found</p>
+            <div className="empty-state">
+              <div className="empty-icon">👥</div>
+              <p>No users found</p>
+            </div>
           ) : (
             <div className="users-list">
               {users.map(user => (
                 <div key={user.id} className="user-card">
                   <div className="user-avatar">
                     {user.profile_photo ? (
-                      <img src={`https://nexmed.onrender.com${user.profile_photo}`} alt={user.name} />
+                      <img src={getImageUrl(user.profile_photo)} alt={user.name} />
                     ) : (
                       <div className="avatar-placeholder">
                         {user.name?.charAt(0)?.toUpperCase() || 'U'}
@@ -401,14 +520,15 @@ const Dashboard = () => {
                     <h4>{user.name}</h4>
                     <p className="user-email">{user.email}</p>
                     <div className="user-meta">
-                      <span className="user-type">{user.user_type || 'user'}</span>
+                      <span className={`user-type ${user.user_type || user.userType}`}>
+                        {user.user_type || user.userType || 'user'}
+                      </span>
                       <span className="user-id">ID: {user.id}</span>
+                      <span className={`user-status ${user.is_active ? 'active' : 'inactive'}`}>
+                        {user.is_active ? 'Active' : 'Inactive'}
+                      </span>
                     </div>
                   </div>
-                  
-                  <button className="view-btn small">
-                    View Profile
-                  </button>
                 </div>
               ))}
             </div>

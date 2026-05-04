@@ -26,6 +26,10 @@ import MedicalEquipmentVerify from "./pages/MedicalEquipmentVerify";
 
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
+import TestOCR from './pages/TestOCR';
+
+// Add this route
+<Route path="/test-ocr" element={<TestOCR />} />
 
 // ✅ Configure axios base URL based on environment
 const API_BASE_URL =

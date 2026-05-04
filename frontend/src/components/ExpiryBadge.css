@@ -1,0 +1,46 @@
+.expiry-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  margin-top: 8px;
+}
+
+.expiry-badge.good {
+  background-color: #d1fae5;
+  color: #065f46;
+}
+
+.expiry-badge.warning {
+  background-color: #fed7aa;
+  color: #92400e;
+}
+
+.expiry-badge.critical {
+  background-color: #fee2e2;
+  color: #991b1b;
+  animation: pulse 2s infinite;
+}
+
+.expiry-badge.expired {
+  background-color: #f3f4f6;
+  color: #6b7280;
+  text-decoration: line-through;
+}
+
+.expiry-icon {
+  font-size: 12px;
+}
+
+.expiry-text {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}

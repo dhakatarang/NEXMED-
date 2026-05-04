@@ -445,4 +445,47 @@ router.get("/test", (req, res) => {
   });
 });
 
+// Add this to your medicineRoutes.js
+const expiryService = require('../services/expiryService');
+
+// In your GET /all endpoint, add expiry status
+router.get("/all", (req, res) => {
+  const query = `
+    SELECT 
+      m.id,
+      m.name,
+      m.description,
+      m.quantity,
+      m.price,
+      m.option_type as optionType,
+      m.image_path as image,
+      m.expiry_date as expiryDate,
+      m.status,
+      m.is_active,
+      u.name as userName
+    FROM medicines m
+    LEFT JOIN users u ON u.id = m.added_by
+    WHERE m.quantity > 0 AND (m.is_active = 1 OR m.is_active IS NULL)
+    ORDER BY 
+      CASE 
+        WHEN m.expiry_date IS NULL THEN 1
+        ELSE julianday(m.expiry_date) 
+      END ASC
+  `;
+  
+  mainDB.all(query, [], (err, rows) => {
+    if (err) {
+      console.error('Error fetching medicines:', err);
+      return res.status(500).json({ success: false, message: err.message });
+    }
+    
+    const medicines = rows.map(medicine => ({
+      ...medicine,
+      expiryStatus: expiryService.getExpiryStatus(medicine.expiryDate)
+    }));
+    
+    res.json({ success: true, medicines });
+  });
+});
+
 module.exports = router;

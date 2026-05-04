@@ -13,6 +13,7 @@ const profileRoutes = require("./routes/profileRoutes");
 const cartRoutes = require("./routes/cartRoutes");
 const adminRoutes = require("./routes/adminRoutes");
 const equipmentScanRoutes = require("./routes/equipmentScanRoutes");
+const notificationRoutes = require("./routes/notificationRoutes"); // Add this
 
 // Import database initialization
 const { initAllDatabases } = require("./database/initDatabases");
@@ -21,6 +22,7 @@ const { uploadsBaseDir } = require("./database/dbConnections");
 // Import services
 const geminiVisionService = require("./services/geminiVisionService");
 const { processOCR, extractMedicineDetails } = require("./services/ocrService");
+const expiryService = require("./services/expiryService"); // Add this
 
 const app = express();
 
@@ -102,6 +104,34 @@ console.log("🔄 Initializing databases...");
 try {
   initAllDatabases();
   console.log("✅ Databases initialized successfully");
+  
+  // Create notifications table if not exists
+  const { mainDB } = require("./database/dbConnections");
+  mainDB.run(`CREATE TABLE IF NOT EXISTS notifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    type TEXT NOT NULL,
+    message TEXT NOT NULL,
+    priority TEXT DEFAULT 'info',
+    related_id INTEGER,
+    is_read INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  )`);
+  
+  // Add status columns to medicines table if not exists
+  mainDB.run(`ALTER TABLE medicines ADD COLUMN status TEXT DEFAULT 'active'`, (err) => {
+    if (err && !err.message.includes('duplicate column')) {
+      console.log('✅ Medicines table ready');
+    }
+  });
+  mainDB.run(`ALTER TABLE medicines ADD COLUMN is_active INTEGER DEFAULT 1`, (err) => {
+    if (err && !err.message.includes('duplicate column')) {
+      console.log('✅ Medicines table ready');
+    }
+  });
+  
+  console.log("📅 Expiry notification service initialized");
 } catch (error) {
   console.error("❌ Database initialization failed:", error);
 }
@@ -188,7 +218,7 @@ app.post(
         success: true,
         message: "OCR processing completed",
         ocrResults: medicineDetails,
-        extractedText: ocrText.substring(0, 500), // Send first 500 chars for preview
+        extractedText: ocrText.substring(0, 500),
       });
     } catch (error) {
       console.error("💥 OCR Error:", error);
@@ -306,7 +336,7 @@ function calculateSuggestedPrices(equipmentName, condition) {
 
   const multiplier = conditionMultiplier[condition] || 0.5;
   const salePrice = Math.round(basePrice * multiplier);
-  const rentPrice = Math.round(salePrice * 0.04); // Daily rent is 4% of sale price
+  const rentPrice = Math.round(salePrice * 0.04);
 
   return { salePrice, rentPrice };
 }
@@ -323,8 +353,40 @@ function getBasePrice(equipmentName) {
   if (name.includes("nebulizer")) return 3000;
   if (name.includes("sphygmomanometer")) return 1500;
   if (name.includes("stethoscope")) return 2000;
-  return 10000; // Default base price
+  return 10000;
 }
+
+// ========== TEST OCR ENDPOINT ==========
+app.post("/api/test-ocr", uploadTemp.single("image"), async (req, res) => {
+  let tempImagePath = null;
+  
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "No image provided" });
+    }
+    
+    tempImagePath = req.file.path;
+    console.log("Testing OCR on:", tempImagePath);
+    
+    const text = await processOCR(tempImagePath);
+    
+    if (tempImagePath && fs.existsSync(tempImagePath)) {
+      fs.unlinkSync(tempImagePath);
+    }
+    
+    res.json({
+      success: true,
+      extractedText: text,
+      textLength: text.length,
+      preview: text.substring(0, 500)
+    });
+  } catch (error) {
+    if (tempImagePath && fs.existsSync(tempImagePath)) {
+      fs.unlinkSync(tempImagePath);
+    }
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // ========== API ROUTES ==========
 app.use("/api/auth", authRoutes);
@@ -335,6 +397,7 @@ app.use("/api/profile", profileRoutes);
 app.use("/api/cart", cartRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/equipment-scan", equipmentScanRoutes);
+app.use("/api/notifications", notificationRoutes); // Add notifications routes
 
 // ========== 404 HANDLER ==========
 app.use((req, res) => {
@@ -363,14 +426,13 @@ setInterval(() => {
     files.forEach((file) => {
       const filePath = path.join(tempDir, file);
       const stats = fs.statSync(filePath);
-      // Delete files older than 1 hour
       if (now - stats.mtimeMs > 60 * 60 * 1000) {
         fs.unlinkSync(filePath);
         console.log(`🧹 Cleaned up old temp file: ${file}`);
       }
     });
   }
-}, 60 * 60 * 1000); // Run every hour
+}, 60 * 60 * 1000);
 
 // ========== START SERVER ==========
 const PORT = process.env.PORT || 5001;
@@ -383,6 +445,7 @@ app.listen(PORT, HOST, () => {
   console.log(`📁 Uploads directory: ${uploadsBaseDir}`);
   console.log(`🤖 Gemini AI: ${process.env.GEMINI_API_KEY ? "✅ Configured" : "❌ Not configured"}`);
   console.log(`🔐 JWT Secret: ${process.env.JWT_SECRET ? "✅ Configured" : "⚠️ Using default"}`);
+  console.log(`📅 Expiry notification service: ✅ Running`);
 });
 
 module.exports = app;

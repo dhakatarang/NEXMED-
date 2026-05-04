@@ -9,21 +9,97 @@ const AdminUsers = () => {
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  // ✅ Get base URL dynamically based on environment
+  const getBaseUrl = () => {
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      return 'http://localhost:5001';
+    }
+    return 'https://nexmed.onrender.com';
+  };
+
+  const BASE_URL = getBaseUrl();
+
+  // ✅ Axios instance with auth header
+  const axiosInstance = axios.create({
+    baseURL: BASE_URL,
+    headers: {
+      'Content-Type': 'application/json'
+    }
+  });
+
+  // Add token to requests
+  axiosInstance.interceptors.request.use(
+    (config) => {
+      const token = localStorage.getItem('token');
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+      return config;
+    },
+    (error) => Promise.reject(error)
+  );
 
   useEffect(() => {
-    fetchUsers();
+    checkAdminAccess();
   }, []);
+
+  const checkAdminAccess = () => {
+    const token = localStorage.getItem('token');
+    const userStr = localStorage.getItem('user');
+    
+    if (!token) {
+      showMessage('Please login to access this page', 'error');
+      setTimeout(() => window.location.href = '/login', 2000);
+      return;
+    }
+    
+    try {
+      const user = JSON.parse(userStr || '{}');
+      // Check if user is admin
+      if (user.userType !== 'admin' && user.user_type !== 'admin' && user.role !== 'admin') {
+        showMessage('Access denied. Admin privileges required.', 'error');
+        setTimeout(() => window.location.href = '/home', 2000);
+        return;
+      }
+      
+      setIsAdmin(true);
+      fetchUsers();
+    } catch (err) {
+      showMessage('Authentication error. Please login again.', 'error');
+      setTimeout(() => window.location.href = '/login', 2000);
+    }
+  };
 
   const fetchUsers = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('https://nexmed.onrender.com/api/admin/users');
+      // Try multiple endpoints that might be available
+      let response;
+      
+      try {
+        response = await axiosInstance.get('/api/admin/users');
+      } catch (err) {
+        // Try alternative endpoint
+        try {
+          response = await axiosInstance.get('/api/users');
+        } catch (e) {
+          // Try another alternative
+          response = await axiosInstance.get('/api/auth/users');
+        }
+      }
+      
       if (response.data.success) {
-        setUsers(response.data.users);
+        setUsers(response.data.users || []);
+      } else {
+        throw new Error(response.data.message || 'Failed to fetch users');
       }
     } catch (error) {
       console.error('Error fetching users:', error);
-      showMessage('Error fetching users', 'error');
+      showMessage('Error fetching users: ' + (error.response?.data?.message || error.message), 'error');
+      // Set empty users array to avoid errors
+      setUsers([]);
     } finally {
       setLoading(false);
     }
@@ -40,25 +116,25 @@ const AdminUsers = () => {
 
   const updateUserRole = async (userId, newRole) => {
     try {
-      const response = await axios.put(`https://nexmed.onrender.com/api/admin/users/${userId}/role`, {
+      const response = await axiosInstance.put(`/api/admin/users/${userId}/role`, {
         role: newRole
       });
       
       if (response.data.success) {
         showMessage('User role updated successfully', 'success');
         setUsers(users.map(user => 
-          user.id === userId ? { ...user, role: newRole } : user
+          user.id === userId ? { ...user, role: newRole, user_type: newRole } : user
         ));
       }
     } catch (error) {
       console.error('Error updating user role:', error);
-      showMessage('Error updating user role', 'error');
+      showMessage('Error updating user role: ' + (error.response?.data?.message || error.message), 'error');
     }
   };
 
   const toggleUserStatus = async (userId, currentStatus) => {
     try {
-      const response = await axios.put(`https://nexmed.onrender.com/api/admin/users/${userId}/status`, {
+      const response = await axiosInstance.put(`/api/admin/users/${userId}/status`, {
         is_active: !currentStatus
       });
       
@@ -70,36 +146,53 @@ const AdminUsers = () => {
       }
     } catch (error) {
       console.error('Error updating user status:', error);
-      showMessage('Error updating user status', 'error');
+      showMessage('Error updating user status: ' + (error.response?.data?.message || error.message), 'error');
     }
   };
 
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    });
+    try {
+      return new Date(dateString).toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      });
+    } catch (error) {
+      return 'Invalid date';
+    }
   };
 
   const filteredUsers = users.filter(user => {
     if (!searchTerm) return true;
     const search = searchTerm.toLowerCase();
     return (
-      user.name?.toLowerCase().includes(search) ||
-      user.email?.toLowerCase().includes(search) ||
-      user.user_type?.toLowerCase().includes(search) ||
+      (user.name || '').toLowerCase().includes(search) ||
+      (user.email || '').toLowerCase().includes(search) ||
+      (user.user_type || user.role || 'user').toLowerCase().includes(search) ||
       user.id.toString().includes(search)
     );
   });
 
   const stats = {
     total: users.length,
-    active: users.filter(u => u.is_active).length,
-    inactive: users.filter(u => !u.is_active).length,
-    admins: users.filter(u => u.role === 'admin').length
+    active: users.filter(u => u.is_active === 1 || u.is_active === true).length,
+    inactive: users.filter(u => u.is_active === 0 || u.is_active === false).length,
+    admins: users.filter(u => u.role === 'admin' || u.user_type === 'admin').length
   };
+
+  if (!isAdmin && !loading) {
+    return (
+      <div className="access-denied">
+        <div className="error-icon">⚠️</div>
+        <h2>Access Denied</h2>
+        <p>You do not have permission to access this page.</p>
+        <button onClick={() => window.location.href = '/home'} className="btn-primary">
+          Go Back Home
+        </button>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -118,9 +211,14 @@ const AdminUsers = () => {
           <h1>User Management</h1>
           <p>Manage system users, roles, and permissions</p>
         </div>
-        <button onClick={fetchUsers} className="refresh-btn">
-          Refresh
-        </button>
+        <div className="header-actions">
+          <button onClick={fetchUsers} className="refresh-btn">
+            🔄 Refresh
+          </button>
+          <button onClick={() => window.location.href = '/admin/dashboard'} className="back-btn">
+            ← Back to Dashboard
+          </button>
+        </div>
       </div>
 
       {/* Message */}
@@ -137,15 +235,15 @@ const AdminUsers = () => {
           <div className="stat-value">{stats.total}</div>
           <div className="stat-label">Total Users</div>
         </div>
-        <div className="stat-card">
+        <div className="stat-card success">
           <div className="stat-value">{stats.active}</div>
           <div className="stat-label">Active</div>
         </div>
-        <div className="stat-card">
+        <div className="stat-card warning">
           <div className="stat-value">{stats.inactive}</div>
           <div className="stat-label">Inactive</div>
         </div>
-        <div className="stat-card">
+        <div className="stat-card info">
           <div className="stat-value">{stats.admins}</div>
           <div className="stat-label">Admins</div>
         </div>
@@ -153,13 +251,21 @@ const AdminUsers = () => {
 
       {/* Search */}
       <div className="search-section">
-        <input
-          type="text"
-          placeholder="Search by name, email, or user type..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="search-input"
-        />
+        <div className="search-wrapper">
+          <span className="search-icon">🔍</span>
+          <input
+            type="text"
+            placeholder="Search by name, email, or user type..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="search-input"
+          />
+          {searchTerm && (
+            <button className="clear-search" onClick={() => setSearchTerm('')}>
+              ✕
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Users Table */}
@@ -193,39 +299,43 @@ const AdminUsers = () => {
                     <td className="id-column">#{user.id}</td>
                     <td>
                       <div className="user-info">
-                        <div className="user-avatar">
-                          {user.name?.charAt(0)?.toUpperCase() || 'U'}
+                        <div className="user-avatar" style={{ backgroundColor: getAvatarColor(user.id) }}>
+                          {user.name?.charAt(0)?.toUpperCase() || user.email?.charAt(0)?.toUpperCase() || 'U'}
                         </div>
-                        <div className="user-name">{user.name}</div>
+                        <div className="user-name">{user.name || 'Unnamed'}</div>
                       </div>
                     </td>
                     <td className="user-email">{user.email}</td>
                     <td>
-                      <span className="user-type-badge">{user.user_type || 'user'}</span>
+                      <span className={`user-type-badge ${user.user_type || user.role || 'user'}`}>
+                        {user.user_type || user.role || 'user'}
+                      </span>
                     </td>
                     <td>
                       <select
-                        value={user.role || 'user'}
+                        value={user.role || user.user_type || 'user'}
                         onChange={(e) => updateUserRole(user.id, e.target.value)}
                         className="role-select"
+                        disabled={user.id === getCurrentUserId()} // Prevent self-role-change
                       >
                         <option value="user">User</option>
                         <option value="admin">Admin</option>
                       </select>
                     </td>
                     <td>
-                      <span className={`status-badge ${user.is_active ? 'active' : 'inactive'}`}>
-                        {user.is_active ? 'Active' : 'Inactive'}
+                      <span className={`status-badge ${(user.is_active === 1 || user.is_active === true) ? 'active' : 'inactive'}`}>
+                        {(user.is_active === 1 || user.is_active === true) ? 'Active' : 'Inactive'}
                       </span>
                     </td>
-                    <td className="join-date">{formatDate(user.created_at)}</td>
+                    <td className="join-date">{formatDate(user.created_at || user.createdAt)}</td>
                     <td>
                       <button
-                        onClick={() => toggleUserStatus(user.id, user.is_active)}
-                        className={`action-btn ${user.is_active ? 'deactivate' : 'activate'}`}
-                        title={user.is_active ? 'Deactivate user' : 'Activate user'}
+                        onClick={() => toggleUserStatus(user.id, user.is_active === 1 || user.is_active === true)}
+                        className={`action-btn ${(user.is_active === 1 || user.is_active === true) ? 'deactivate' : 'activate'}`}
+                        title={(user.is_active === 1 || user.is_active === true) ? 'Deactivate user' : 'Activate user'}
+                        disabled={user.id === getCurrentUserId()} // Prevent self-deactivation
                       >
-                        {user.is_active ? 'Deactivate' : 'Activate'}
+                        {(user.is_active === 1 || user.is_active === true) ? 'Deactivate' : 'Activate'}
                       </button>
                     </td>
                   </tr>
@@ -244,6 +354,26 @@ const AdminUsers = () => {
       </div>
     </div>
   );
+};
+
+// Helper function to get avatar color based on user ID
+const getAvatarColor = (id) => {
+  const colors = [
+    '#6366f1', '#8b5cf6', '#ec4899', '#f43f5e',
+    '#ef4444', '#f97316', '#eab308', '#10b981',
+    '#14b8a6', '#06b6d4', '#3b82f6'
+  ];
+  return colors[(id || 0) % colors.length];
+};
+
+// Helper function to get current user ID
+const getCurrentUserId = () => {
+  try {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    return user.id;
+  } catch {
+    return null;
+  }
 };
 
 export default AdminUsers;

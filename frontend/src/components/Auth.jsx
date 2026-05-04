@@ -17,6 +17,16 @@ const Auth = () => {
   const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
 
+  // ✅ Get base URL dynamically based on environment
+  const getBaseUrl = () => {
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      return 'http://localhost:5001';
+    }
+    return 'https://nexmed.onrender.com';
+  };
+
+  const BASE_URL = getBaseUrl();
+
   const handleChange = (e) => {
     setFormData({
       ...formData,
@@ -34,6 +44,14 @@ const Auth = () => {
         setError('Password must be at least 6 characters');
         return false;
       }
+      if (formData.name.trim().length < 2) {
+        setError('Please enter your full name');
+        return false;
+      }
+    }
+    if (!formData.email.includes('@')) {
+      setError('Please enter a valid email address');
+      return false;
     }
     return true;
   };
@@ -46,26 +64,113 @@ const Auth = () => {
     setError('');
 
     try {
-      const endpoint = isLogin ? 'https://nexmed.onrender.com/api/login' : 'https://nexmed.onrender.com/api/register';
+      // ✅ Use dynamic base URL for API calls
+      const endpoint = isLogin 
+        ? `${BASE_URL}/api/auth/login` 
+        : `${BASE_URL}/api/auth/register`;
       
       // Remove confirmPassword before sending
       const { confirmPassword, ...submitData } = formData;
       
+      console.log('Sending request to:', endpoint);
+      console.log('Request data:', { ...submitData, password: '***' });
+      
       const response = await axios.post(endpoint, submitData);
+      
+      console.log('Response:', response.data);
       
       if (response.data.token) {
         localStorage.setItem('token', response.data.token);
         localStorage.setItem('user', JSON.stringify(response.data.user));
         
+        // ✅ Store user type for role-based routing
+        if (response.data.user.userType) {
+          localStorage.setItem('userType', response.data.user.userType);
+        }
+        
         // Trigger storage event for navbar update
         window.dispatchEvent(new Event('storage'));
         
-        // Navigate to home page
-        navigate('/home');
+        // ✅ Navigate to home page or dashboard based on user type
+        if (response.data.user.userType === 'admin') {
+          navigate('/admin');
+        } else {
+          navigate('/home');
+        }
+      } else if (response.data.success) {
+        // Handle case where token might be in different format
+        if (response.data.user) {
+          // If user data is returned but no token (should not happen)
+          console.warn('No token received but login was successful');
+          navigate('/home');
+        }
       }
     } catch (err) {
       console.error('Auth error:', err);
-      setError(err.response?.data?.error || err.response?.data?.message || 'Something went wrong');
+      
+      // ✅ Better error messages
+      if (err.response) {
+        // Server responded with error status
+        const errorMessage = err.response.data?.error || 
+                           err.response.data?.message || 
+                           err.response.data?.msg ||
+                           'Authentication failed';
+        setError(errorMessage);
+        
+        // Handle specific error cases
+        if (err.response.status === 401) {
+          setError('Invalid email or password');
+        } else if (err.response.status === 409) {
+          setError('User already exists. Please login instead.');
+        } else if (err.response.status === 400) {
+          setError('Please check your input and try again');
+        }
+      } else if (err.request) {
+        // Request was made but no response
+        setError('Cannot connect to server. Please check if backend is running.');
+      } else {
+        // Something else happened
+        setError('Something went wrong. Please try again.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ✅ Function to handle demo login for testing
+  const handleDemoLogin = async (userType = 'user') => {
+    setLoading(true);
+    setError('');
+    
+    try {
+      let email, password;
+      switch(userType) {
+        case 'admin':
+          email = 'admin@nexmed.com';
+          password = 'admin123';
+          break;
+        case 'donor':
+          email = 'donor@nexmed.com';
+          password = 'donor123';
+          break;
+        default:
+          email = 'user@nexmed.com';
+          password = 'user123';
+      }
+      
+      const response = await axios.post(`${BASE_URL}/api/auth/login`, {
+        email,
+        password
+      });
+      
+      if (response.data.token) {
+        localStorage.setItem('token', response.data.token);
+        localStorage.setItem('user', JSON.stringify(response.data.user));
+        window.dispatchEvent(new Event('storage'));
+        navigate('/home');
+      }
+    } catch (err) {
+      setError('Demo login failed. Please try regular login.');
     } finally {
       setLoading(false);
     }
@@ -155,8 +260,9 @@ const Auth = () => {
                 className="password-toggle"
                 onClick={() => setShowPassword(!showPassword)}
                 disabled={loading}
+                aria-label="Toggle password visibility"
               >
-                {showPassword ? '👁️' : '👁️‍🗨️'}
+                {showPassword ? '🙈' : '👁️'}
               </button>
             </div>
           </div>
@@ -180,7 +286,7 @@ const Auth = () => {
 
           {isLogin && (
             <div className="forgot-password">
-              <button type="button" className="forgot-link">
+              <button type="button" className="forgot-link" onClick={() => alert('Please contact support to reset your password')}>
                 Forgot password?
               </button>
             </div>
@@ -202,13 +308,51 @@ const Auth = () => {
           </button>
         </form>
 
+        {/* ✅ Demo Login Buttons for Testing */}
+        {isLogin && process.env.NODE_ENV !== 'production' && (
+          <div className="demo-login">
+            <div className="demo-divider">
+              <span>Or try demo accounts</span>
+            </div>
+            <div className="demo-buttons">
+              <button 
+                type="button" 
+                className="demo-btn user"
+                onClick={() => handleDemoLogin('user')}
+                disabled={loading}
+              >
+                Demo User
+              </button>
+              <button 
+                type="button" 
+                className="demo-btn donor"
+                onClick={() => handleDemoLogin('donor')}
+                disabled={loading}
+              >
+                Demo Donor
+              </button>
+              <button 
+                type="button" 
+                className="demo-btn admin"
+                onClick={() => handleDemoLogin('admin')}
+                disabled={loading}
+              >
+                Demo Admin
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="auth-footer">
           <p>
             {isLogin ? "Don't have an account?" : "Already have an account?"}
             <button
               type="button"
               className="switch-btn"
-              onClick={() => setIsLogin(!isLogin)}
+              onClick={() => {
+                setIsLogin(!isLogin);
+                setError(''); // Clear error when switching
+              }}
               disabled={loading}
             >
               {isLogin ? 'Sign Up' : 'Sign In'}
@@ -219,9 +363,13 @@ const Auth = () => {
         {!isLogin && (
           <p className="terms-note">
             By creating an account, you agree to our{' '}
-            <button type="button" className="terms-link">Terms of Service</button>
+            <button type="button" className="terms-link" onClick={() => alert('Terms of Service')}>
+              Terms of Service
+            </button>
             {' '}and{' '}
-            <button type="button" className="terms-link">Privacy Policy</button>
+            <button type="button" className="terms-link" onClick={() => alert('Privacy Policy')}>
+              Privacy Policy
+            </button>
           </p>
         )}
       </div>

@@ -5,6 +5,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import './Navbar.css';
+import Notifications from './Notifications';
+
 
 const Navbar = () => {
   const [user, setUser] = useState(null);
@@ -213,6 +215,9 @@ const Navbar = () => {
       {/* Overlays */}
       {dropdownOpen && <div className="overlay" onClick={closeDropdown}></div>}
       {mobileMenuOpen && <div className="overlay" onClick={closeMobileMenu}></div>}
+      // Add this to your navbar
+<Notifications />
+
     </nav>
   );
 };

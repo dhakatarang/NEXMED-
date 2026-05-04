@@ -11,6 +11,36 @@ const AdminOrders = () => {
   const [filter, setFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
 
+  // ✅ Get base URL dynamically based on environment
+  const getBaseUrl = () => {
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      return 'http://localhost:5001';
+    }
+    return 'https://nexmed.onrender.com';
+  };
+
+  const BASE_URL = getBaseUrl();
+
+  // ✅ Axios instance with auth header
+  const axiosInstance = axios.create({
+    baseURL: BASE_URL,
+    headers: {
+      'Content-Type': 'application/json'
+    }
+  });
+
+  // Add token to requests
+  axiosInstance.interceptors.request.use(
+    (config) => {
+      const token = localStorage.getItem('token');
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+      return config;
+    },
+    (error) => Promise.reject(error)
+  );
+
   useEffect(() => {
     fetchOrders();
   }, []);
@@ -18,13 +48,30 @@ const AdminOrders = () => {
   const fetchOrders = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('https://nexmed.onrender.com/api/admin/orders');
+      // Try multiple endpoints
+      let response;
+      
+      try {
+        response = await axiosInstance.get('/api/admin/orders');
+      } catch (err) {
+        // Try alternative endpoint
+        try {
+          response = await axiosInstance.get('/api/orders');
+        } catch (e) {
+          // Try another alternative
+          response = await axiosInstance.get('/api/orders/all');
+        }
+      }
+      
       if (response.data.success) {
-        setOrders(response.data.orders);
+        setOrders(response.data.orders || []);
+      } else {
+        throw new Error(response.data.message || 'Failed to fetch orders');
       }
     } catch (error) {
       console.error('Error fetching orders:', error);
-      showMessage('Error fetching orders', 'error');
+      showMessage('Error fetching orders: ' + (error.response?.data?.message || error.message), 'error');
+      setOrders([]);
     } finally {
       setLoading(false);
     }
@@ -41,31 +88,42 @@ const AdminOrders = () => {
 
   const updateOrderStatus = async (orderId, newStatus) => {
     try {
-      const response = await axios.put(`https://nexmed.onrender.com/api/admin/orders/${orderId}/status`, {
-        status: newStatus
-      });
+      let response;
+      try {
+        response = await axiosInstance.put(`/api/admin/orders/${orderId}/status`, {
+          status: newStatus
+        });
+      } catch (err) {
+        // Try alternative endpoint
+        response = await axiosInstance.put(`/api/orders/${orderId}/status`, {
+          status: newStatus
+        });
+      }
       
       if (response.data.success) {
         showMessage('Order status updated successfully', 'success');
         setOrders(orders.map(order => 
           order.id === orderId ? { ...order, status: newStatus } : order
         ));
+      } else {
+        throw new Error(response.data.message || 'Update failed');
       }
     } catch (error) {
       console.error('Error updating order status:', error);
-      showMessage('Error updating order status', 'error');
+      showMessage('Error updating order status: ' + (error.response?.data?.message || error.message), 'error');
     }
   };
 
   const getStatusColor = (status) => {
     const colors = {
-      pending: '#b76e2e',
-      confirmed: '#2563eb',
-      shipped: '#4a4a4a',
-      delivered: '#2e7d32',
-      cancelled: '#c62828'
+      pending: '#f59e0b',
+      confirmed: '#3b82f6',
+      shipped: '#8b5cf6',
+      delivered: '#10b981',
+      cancelled: '#ef4444',
+      completed: '#10b981'
     };
-    return colors[status] || '#9ca3af';
+    return colors[status?.toLowerCase()] || '#9ca3af';
   };
 
   const getStatusClass = (status) => {
@@ -74,62 +132,70 @@ const AdminOrders = () => {
       confirmed: 'confirmed',
       shipped: 'shipped',
       delivered: 'delivered',
-      cancelled: 'cancelled'
+      cancelled: 'cancelled',
+      completed: 'completed'
     };
-    return classes[status] || '';
+    return classes[status?.toLowerCase()] || '';
   };
 
   const getOptionTypeClass = (optionType) => {
     const classes = {
       sell: 'purchase',
       rent: 'rental',
-      donate: 'donation'
+      donate: 'donation',
+      free: 'donation'
     };
-    return classes[optionType] || '';
+    return classes[optionType?.toLowerCase()] || 'purchase';
   };
 
   const getOptionTypeText = (optionType) => {
     const types = {
       sell: 'Purchase',
       rent: 'Rental',
-      donate: 'Donation'
+      donate: 'Donation',
+      free: 'Donation'
     };
-    return types[optionType] || optionType;
+    return types[optionType?.toLowerCase()] || optionType || 'Purchase';
   };
 
   const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    return {
-      date: date.toLocaleDateString('en-GB', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric'
-      }),
-      time: date.toLocaleTimeString('en-US', {
-        hour: '2-digit',
-        minute: '2-digit'
-      })
-    };
+    if (!dateString) return { date: 'N/A', time: 'N/A' };
+    try {
+      const date = new Date(dateString);
+      return {
+        date: date.toLocaleDateString('en-GB', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric'
+        }),
+        time: date.toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit'
+        })
+      };
+    } catch (error) {
+      return { date: 'Invalid', time: 'Invalid' };
+    }
   };
 
   const filteredOrders = orders.filter(order => {
-    if (filter !== 'all' && order.status !== filter) return false;
+    if (filter !== 'all' && order.status?.toLowerCase() !== filter.toLowerCase()) return false;
     if (!searchTerm) return true;
     const search = searchTerm.toLowerCase();
     return (
-      order.id.toString().includes(search) ||
-      order.user_name?.toLowerCase().includes(search) ||
-      order.user_email?.toLowerCase().includes(search)
+      order.id?.toString().includes(search) ||
+      (order.user_name || order.customer_name || '').toLowerCase().includes(search) ||
+      (order.user_email || order.customer_email || '').toLowerCase().includes(search)
     );
   });
 
   const stats = {
     total: orders.length,
-    pending: orders.filter(o => o.status === 'pending').length,
-    confirmed: orders.filter(o => o.status === 'confirmed').length,
-    shipped: orders.filter(o => o.status === 'shipped').length,
-    delivered: orders.filter(o => o.status === 'delivered').length,
-    cancelled: orders.filter(o => o.status === 'cancelled').length,
+    pending: orders.filter(o => o.status?.toLowerCase() === 'pending').length,
+    confirmed: orders.filter(o => o.status?.toLowerCase() === 'confirmed').length,
+    shipped: orders.filter(o => o.status?.toLowerCase() === 'shipped').length,
+    delivered: orders.filter(o => o.status?.toLowerCase() === 'delivered' || o.status?.toLowerCase() === 'completed').length,
+    cancelled: orders.filter(o => o.status?.toLowerCase() === 'cancelled').length,
     totalRevenue: orders.reduce((sum, order) => sum + (parseFloat(order.total_amount) || 0), 0)
   };
 
@@ -150,9 +216,14 @@ const AdminOrders = () => {
           <h1>Order Management</h1>
           <p>Track and manage all customer orders</p>
         </div>
-        <button onClick={fetchOrders} className="refresh-btn">
-          Refresh
-        </button>
+        <div className="header-actions">
+          <button onClick={fetchOrders} className="refresh-btn">
+            🔄 Refresh
+          </button>
+          <button onClick={() => window.location.href = '/admin/dashboard'} className="back-btn">
+            ← Back to Dashboard
+          </button>
+        </div>
       </div>
 
       {/* Message */}
@@ -170,16 +241,16 @@ const AdminOrders = () => {
           <div className="stat-label">Total Orders</div>
         </div>
         <div className="stat-card">
-          <div className="stat-value">${stats.totalRevenue.toFixed(2)}</div>
+          <div className="stat-value">₹{stats.totalRevenue.toLocaleString()}</div>
           <div className="stat-label">Total Revenue</div>
         </div>
-        <div className="stat-card">
+        <div className="stat-card pending-card">
           <div className="stat-value">{stats.pending}</div>
           <div className="stat-label">Pending</div>
         </div>
-        <div className="stat-card">
+        <div className="stat-card delivered-card">
           <div className="stat-value">{stats.delivered}</div>
-          <div className="stat-label">Delivered</div>
+          <div className="stat-label">Completed</div>
         </div>
       </div>
 
@@ -190,40 +261,48 @@ const AdminOrders = () => {
             className={`filter-btn ${filter === 'all' ? 'active' : ''}`}
             onClick={() => setFilter('all')}
           >
-            All
+            All ({stats.total})
           </button>
           <button 
             className={`filter-btn ${filter === 'pending' ? 'active' : ''}`}
             onClick={() => setFilter('pending')}
           >
-            Pending
+            Pending ({stats.pending})
           </button>
           <button 
             className={`filter-btn ${filter === 'confirmed' ? 'active' : ''}`}
             onClick={() => setFilter('confirmed')}
           >
-            Confirmed
+            Confirmed ({stats.confirmed})
           </button>
           <button 
             className={`filter-btn ${filter === 'shipped' ? 'active' : ''}`}
             onClick={() => setFilter('shipped')}
           >
-            Shipped
+            Shipped ({stats.shipped})
           </button>
           <button 
             className={`filter-btn ${filter === 'delivered' ? 'active' : ''}`}
             onClick={() => setFilter('delivered')}
           >
-            Delivered
+            Completed ({stats.delivered})
           </button>
         </div>
-        <input
-          type="text"
-          placeholder="Search by order ID, customer name, or email..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="search-input"
-        />
+        <div className="search-wrapper">
+          <span className="search-icon">🔍</span>
+          <input
+            type="text"
+            placeholder="Search by order ID, customer name, or email..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="search-input"
+          />
+          {searchTerm && (
+            <button className="clear-search" onClick={() => setSearchTerm('')}>
+              ✕
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Orders Table */}
@@ -248,24 +327,25 @@ const AdminOrders = () => {
                 <tr>
                   <td colSpan="9" className="empty-state">
                     <div className="empty-content">
+                      <div className="empty-icon">📦</div>
                       <p>No orders found</p>
                     </div>
                   </td>
                 </tr>
               ) : (
                 filteredOrders.map(order => {
-                  const formattedDate = formatDate(order.created_at);
+                  const formattedDate = formatDate(order.created_at || order.order_date);
                   return (
                     <tr key={order.id}>
                       <td className="id-column">#{order.id}</td>
                       <td>
                         <div className="customer-info">
-                          <div className="customer-name">{order.user_name}</div>
-                          <div className="customer-email">{order.user_email}</div>
+                          <div className="customer-name">{order.user_name || order.customer_name || 'Unknown'}</div>
+                          <div className="customer-email">{order.user_email || order.customer_email || '—'}</div>
                         </div>
                       </td>
                       <td>
-                        <span className="item-type">{order.item_type}</span>
+                        <span className="item-type">{order.item_type || 'Product'}</span>
                       </td>
                       <td>
                         <span className={`option-badge ${getOptionTypeClass(order.option_type)}`}>
@@ -273,16 +353,18 @@ const AdminOrders = () => {
                         </span>
                       </td>
                       <td className="quantity-column">
-                        <span className="quantity-badge">{order.quantity}</span>
+                        <span className="quantity-badge">{order.quantity || 1}</span>
                       </td>
                       <td className="amount-column">
-                        <span className="amount-value">${parseFloat(order.total_amount || 0).toFixed(2)}</span>
+                        <span className="amount-value">
+                          ₹{(parseFloat(order.total_amount) || 0).toLocaleString()}
+                        </span>
                       </td>
                       <td>
                         <div className="status-container">
                           <span className={`status-dot ${getStatusClass(order.status)}`}></span>
                           <span className={`status-text ${getStatusClass(order.status)}`}>
-                            {order.status}
+                            {order.status || 'pending'}
                           </span>
                         </div>
                       </td>
@@ -294,7 +376,7 @@ const AdminOrders = () => {
                       </td>
                       <td>
                         <select
-                          value={order.status}
+                          value={order.status || 'pending'}
                           onChange={(e) => updateOrderStatus(order.id, e.target.value)}
                           className="status-select"
                           style={{ borderColor: getStatusColor(order.status) }}
@@ -332,7 +414,7 @@ const AdminOrders = () => {
               <div className="progress-bar">
                 <div 
                   className="progress-fill pending" 
-                  style={{ width: `${(stats.pending / stats.total) * 100}%` }}
+                  style={{ width: stats.total > 0 ? `${(stats.pending / stats.total) * 100}%` : '0%' }}
                 ></div>
               </div>
               <span className="dist-value">{stats.pending}</span>
@@ -342,7 +424,7 @@ const AdminOrders = () => {
               <div className="progress-bar">
                 <div 
                   className="progress-fill confirmed" 
-                  style={{ width: `${(stats.confirmed / stats.total) * 100}%` }}
+                  style={{ width: stats.total > 0 ? `${(stats.confirmed / stats.total) * 100}%` : '0%' }}
                 ></div>
               </div>
               <span className="dist-value">{stats.confirmed}</span>
@@ -352,17 +434,17 @@ const AdminOrders = () => {
               <div className="progress-bar">
                 <div 
                   className="progress-fill shipped" 
-                  style={{ width: `${(stats.shipped / stats.total) * 100}%` }}
+                  style={{ width: stats.total > 0 ? `${(stats.shipped / stats.total) * 100}%` : '0%' }}
                 ></div>
               </div>
               <span className="dist-value">{stats.shipped}</span>
             </div>
             <div className="distribution-item">
-              <span className="dist-label">Delivered</span>
+              <span className="dist-label">Completed</span>
               <div className="progress-bar">
                 <div 
                   className="progress-fill delivered" 
-                  style={{ width: `${(stats.delivered / stats.total) * 100}%` }}
+                  style={{ width: stats.total > 0 ? `${(stats.delivered / stats.total) * 100}%` : '0%' }}
                 ></div>
               </div>
               <span className="dist-value">{stats.delivered}</span>
@@ -372,7 +454,7 @@ const AdminOrders = () => {
               <div className="progress-bar">
                 <div 
                   className="progress-fill cancelled" 
-                  style={{ width: `${(stats.cancelled / stats.total) * 100}%` }}
+                  style={{ width: stats.total > 0 ? `${(stats.cancelled / stats.total) * 100}%` : '0%' }}
                 ></div>
               </div>
               <span className="dist-value">{stats.cancelled}</span>

@@ -1,13 +1,27 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import './SearchBar.css';
 
 function SearchBar({ placeholder = "Search medicines, equipment, or services...", onSearch, autoFocus = false }) {
     const [query, setQuery] = useState('');
     const [isExpanded, setIsExpanded] = useState(false);
     const [recentSearches, setRecentSearches] = useState([]);
+    const [searchResults, setSearchResults] = useState([]);
+    const [showResults, setShowResults] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
     const inputRef = useRef(null);
     const navigate = useNavigate();
+
+    // Get base URL dynamically
+    const getBaseUrl = () => {
+        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+            return 'http://localhost:5001';
+        }
+        return 'https://nexmed-backend.onrender.com';
+    };
+
+    const BASE_URL = getBaseUrl();
 
     // Load recent searches from localStorage
     useEffect(() => {
@@ -24,6 +38,81 @@ function SearchBar({ placeholder = "Search medicines, equipment, or services..."
         }
     }, [autoFocus]);
 
+    // Debounced search
+    useEffect(() => {
+        const delayDebounceFn = setTimeout(() => {
+            if (query.trim().length >= 2) {
+                performSearch(query);
+            } else {
+                setSearchResults([]);
+                setShowResults(false);
+            }
+        }, 300);
+
+        return () => clearTimeout(delayDebounceFn);
+    }, [query]);
+
+    const performSearch = async (searchQuery) => {
+        if (!searchQuery.trim()) return;
+        
+        setIsLoading(true);
+        try {
+            const token = localStorage.getItem("token");
+            
+            // Search both medicines and equipment
+            const [medicinesRes, equipmentsRes] = await Promise.all([
+                axios.get(`${BASE_URL}/api/medicines/search?q=${encodeURIComponent(searchQuery)}`, {
+                    headers: token ? { Authorization: `Bearer ${token}` } : {}
+                }),
+                axios.get(`${BASE_URL}/api/equipments/search?q=${encodeURIComponent(searchQuery)}`, {
+                    headers: token ? { Authorization: `Bearer ${token}` } : {}
+                })
+            ]);
+
+            const results = [];
+            
+            // Add medicines to results
+            if (medicinesRes.data.success && medicinesRes.data.medicines) {
+                medicinesRes.data.medicines.forEach(medicine => {
+                    results.push({
+                        id: medicine.id,
+                        type: 'medicine',
+                        name: medicine.name,
+                        description: medicine.description,
+                        price: medicine.price,
+                        image: medicine.image_path,
+                        category: 'Medicine'
+                    });
+                });
+            }
+            
+            // Add equipments to results
+            if (equipmentsRes.data.success && equipmentsRes.data.equipments) {
+                equipmentsRes.data.equipments.forEach(equipment => {
+                    results.push({
+                        id: equipment.id,
+                        type: 'equipment',
+                        name: equipment.name,
+                        description: equipment.description,
+                        price: equipment.price,
+                        rentPrice: equipment.rentPrice,
+                        image: equipment.image,
+                        category: 'Equipment'
+                    });
+                });
+            }
+            
+            setSearchResults(results);
+            setShowResults(results.length > 0);
+        } catch (error) {
+            console.error('Search error:', error);
+            setSearchResults([]);
+            setShowResults(false);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     const saveSearch = (searchTerm) => {
         if (!searchTerm.trim()) return;
         
@@ -39,10 +128,12 @@ function SearchBar({ placeholder = "Search medicines, equipment, or services..."
             if (onSearch) {
                 onSearch(query);
             } else {
-                navigate('/search', { state: { query } });
+                // Navigate to search results page with the query
+                navigate('/search', { state: { query: query, results: searchResults } });
             }
             
             setIsExpanded(false);
+            setShowResults(false);
         }
     };
 
@@ -51,19 +142,36 @@ function SearchBar({ placeholder = "Search medicines, equipment, or services..."
             handleSearch();
         } else if (e.key === 'Escape') {
             setIsExpanded(false);
+            setShowResults(false);
             setQuery('');
         }
     };
 
     const handleRecentClick = (term) => {
         setQuery(term);
+        performSearch(term);
         if (inputRef.current) {
             inputRef.current.focus();
         }
     };
 
+    const handleResultClick = (result) => {
+        saveSearch(query);
+        // Navigate to the appropriate detail page
+        if (result.type === 'medicine') {
+            navigate(`/medicines/${result.id}`);
+        } else if (result.type === 'equipment') {
+            navigate(`/medicalequipments/${result.id}`);
+        }
+        setShowResults(false);
+        setIsExpanded(false);
+        setQuery('');
+    };
+
     const clearSearch = () => {
         setQuery('');
+        setSearchResults([]);
+        setShowResults(false);
         if (inputRef.current) {
             inputRef.current.focus();
         }
@@ -72,6 +180,13 @@ function SearchBar({ placeholder = "Search medicines, equipment, or services..."
     const clearRecent = () => {
         setRecentSearches([]);
         localStorage.removeItem('recentSearches');
+    };
+
+    const getImageUrl = (imagePath) => {
+        if (!imagePath) return null;
+        if (imagePath.startsWith('http')) return imagePath;
+        if (imagePath.startsWith('/')) return `${BASE_URL}${imagePath}`;
+        return `${BASE_URL}/uploads/${imagePath}`;
     };
 
     return (
@@ -99,10 +214,15 @@ function SearchBar({ placeholder = "Search medicines, equipment, or services..."
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
                         onKeyDown={handleKeyPress}
-                        onFocus={() => setIsExpanded(true)}
+                        onFocus={() => {
+                            setIsExpanded(true);
+                            if (query.length >= 2) setShowResults(true);
+                        }}
                         onBlur={() => {
-                            // Delay to allow click on recent searches
-                            setTimeout(() => setIsExpanded(false), 200);
+                            setTimeout(() => {
+                                setIsExpanded(false);
+                                setShowResults(false);
+                            }, 200);
                         }}
                     />
                     
@@ -115,6 +235,12 @@ function SearchBar({ placeholder = "Search medicines, equipment, or services..."
                             ×
                         </button>
                     )}
+                    
+                    {isLoading && (
+                        <div className="search-loading">
+                            <div className="loading-spinner-small"></div>
+                        </div>
+                    )}
                 </div>
                 
                 <button 
@@ -126,8 +252,66 @@ function SearchBar({ placeholder = "Search medicines, equipment, or services..."
                 </button>
             </div>
 
+            {/* Search Results Dropdown */}
+            {showResults && searchResults.length > 0 && (
+                <div className="search-results-dropdown">
+                    <div className="results-header">
+                        <span className="results-title">Search Results ({searchResults.length})</span>
+                    </div>
+                    <ul className="results-list">
+                        {searchResults.slice(0, 8).map((result, index) => (
+                            <li key={`${result.type}-${result.id}-${index}`} className="result-item">
+                                <button
+                                    onClick={() => handleResultClick(result)}
+                                    className="result-link"
+                                >
+                                    <div className="result-image">
+                                        {result.image ? (
+                                            <img 
+                                                src={getImageUrl(result.image)} 
+                                                alt={result.name}
+                                                onError={(e) => {
+                                                    e.target.style.display = 'none';
+                                                    e.target.parentNode.innerHTML = result.type === 'medicine' ? '💊' : '⚕️';
+                                                }}
+                                            />
+                                        ) : (
+                                            <span className="result-icon">
+                                                {result.type === 'medicine' ? '💊' : '⚕️'}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="result-info">
+                                        <div className="result-name">
+                                            {result.name}
+                                            <span className="result-category">{result.category}</span>
+                                        </div>
+                                        <div className="result-description">
+                                            {result.description?.substring(0, 60)}...
+                                        </div>
+                                        <div className="result-price">
+                                            {result.price === 0 ? 'Free' : `₹${result.price}`}
+                                            {result.rentPrice && (
+                                                <span className="rent-price"> | Rent: ₹{result.rentPrice}/day</span>
+                                            )}
+                                        </div>
+                                    </div>
+                                </button>
+                            </li>
+                        ))}
+                    </ul>
+                    {searchResults.length > 8 && (
+                        <div className="view-all">
+                            <button onClick={handleSearch} className="view-all-button">
+                                View all {searchResults.length} results
+                            </button>
+                        </div>
+                    )}
+                </div>
+            )}
+
             {/* Recent Searches Dropdown */}
-            {isExpanded && recentSearches.length > 0 && (
+            {isExpanded && !showResults && recentSearches.length > 0 && !query && (
                 <div className="recent-searches">
                     <div className="recent-header">
                         <span className="recent-title">Recent Searches</span>
