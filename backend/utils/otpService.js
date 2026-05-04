@@ -1,3 +1,4 @@
+//utils/otpService.js
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 const { mainDB } = require('../database/dbConnections');
